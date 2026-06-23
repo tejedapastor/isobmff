@@ -148,6 +148,13 @@ static MP4Err mdatMoved(struct MP4SampleToChunkAtom *self, u64 mdatBase, u64 mda
       if(err) goto bail;
       /* get data entry */
       savedRefIndex = sampleEntry->dataReferenceIndex;
+      
+      // Temporary fix before finding a proper solution to dataReferenceIndex not
+      // being retrieved correctly. @todo Fix
+      if(savedRefIndex != 1)
+      {
+        savedRefIndex = 1;
+      }
       err           = dref->getEntry(dref, savedRefIndex, &dataEntry);
       if(err) goto bail;
       /* mdat? */

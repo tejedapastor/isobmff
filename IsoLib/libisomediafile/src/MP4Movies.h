@@ -80,6 +80,7 @@ extern "C"
     MP4NewTrackIsVolumetric = (1 << 4), /**< track contains volumetric media */
     MP4NewTrackIsHaptic     = (1 << 5), /**< track contains haptic media */
     MP4NewTrackIsMebx       = (1 << 6), /**< track contains boxed meta-data */
+    MP4NewTrackIsWaveform   = (1 << 7), /**< track contains waveform media */
     MP4NewTrackIsPrivate    = (1 << 8)  /**< track contains a media type unknown to MPEG-4 */
   };
 
@@ -114,6 +115,8 @@ extern "C"
     MP4MetaHandlerType             = MP4_FOUR_CHAR_CODE('m', 'e', 't', 'a'),
     MP4VolumetricHandlerType       = MP4_FOUR_CHAR_CODE('v', 'o', 'l', 'v'),
     MP4HapticHandlerType           = MP4_FOUR_CHAR_CODE('h', 'a', 'p', 't'),
+    // @todo Define proper 4CC for the waveform handler type
+    MP4WaveformHandlerType         = MP4_FOUR_CHAR_CODE('w', 'a', 'v', 'e'),
 
     ISOXMLAtomType       = MP4_FOUR_CHAR_CODE('x', 'm', 'l', ' '),
     ISOBinaryXMLAtomType = MP4_FOUR_CHAR_CODE('b', 'x', 'm', 'l')
@@ -924,6 +927,7 @@ extern "C"
    * ISONewTrackIsAudio     | if the track will contain audio media
    * ISONewTrackIsPrivate   | if the track will not contain a media type known to MPEG-4
    * ISONewTrackIsMetadata  | if the track will be a meta-data track
+   * ISONewTrackIsWaveform  | if the track will contain waveform media
    * @param outTrack output track object
    * @return MP4Err error code
    */

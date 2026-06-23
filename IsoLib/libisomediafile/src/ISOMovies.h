@@ -51,12 +51,14 @@ extern "C"
 #define ISONewTrackIsAudio MP4NewTrackIsAudio
 #define ISONewTrackIsPrivate MP4NewTrackIsPrivate
 #define ISONewTrackIsMetadata MP4NewTrackIsMetadata
+#define ISONewTrackIsWaveform MP4NewTrackIsWaveform
 
 #define ISOVisualHandlerType MP4VisualHandlerType
 #define ISOAudioHandlerType MP4AudioHandlerType
 #define ISOHintHandlerType MP4HintHandlerType
 #define ISOVolumetricHandlerType MP4VolumetricHandlerType
 #define ISOHapticHandlerType MP4HapticHandlerType
+#define ISOWaveformHandlerType MP4WaveformHandlerType
 
 #define ISOOpenMovieNormal MP4OpenMovieNormal
 #define ISOOpenMovieDebug MP4OpenMovieDebug
@@ -931,6 +933,24 @@ extern "C"
   ISONewAMRWPSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH,
                                u32 dataReferenceIndex, u32 vendor, u8 decoder_version);
 
+
+  /*************************************************************************************************
+   * Biomedical and General Waveform
+   ************************************************************************************************/
+
+  /**
+   * @brief Create a new BGW sample entry.
+   * @ingroup SampleDescr
+   * @param theTrack input trak object
+   * @param sampleDescriptionH Handle for the sample description
+   * @param dataReferenceIndex Data reference index
+   * @decoderConfigAtom BGW DecoderConfigRecord atom
+   *
+   */
+  ISO_EXTERN(ISOErr)
+  ISONewBGWSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH, u32 dataReferenceIndex,
+                            MP4GenericAtomRecord decoderConfigAtom);
+                             
   /*************************************************************************************************
    * Meta Data
    ************************************************************************************************/

@@ -74,6 +74,7 @@ add_library(
     src/LHEVCConfigAtom.c
     src/VVCConfigAtom.c
     src/VVCNALUConfigAtom.c
+    src/BGWConfigAtom.c
     src/HintMediaHeaderAtom.c
     src/IPMPToolUpdateCommand.c
     src/ISMAKMSAtom.c
@@ -206,6 +207,7 @@ add_library(
     src/VCConfigAtom.c
     src/VideoMediaHeaderAtom.c
     src/VisualSampleEntryAtom.c
+    src/WaveformSampleEntryAtom.c
     src/VolumetricVisualMediaHeaderAtom.c
     src/VolumetricVisualSampleEntryAtom.c
     src/HapticSampleEntryAtom.c

@@ -169,7 +169,13 @@ enum
   MP4MetadataLocaleBoxType                     = MP4_FOUR_CHAR_CODE('l', 'o', 'c', 'a'),
   MP4MetadataSetupBoxType                      = MP4_FOUR_CHAR_CODE('s', 'e', 't', 'u'),
   MP4GroupsListBoxType                         = MP4_FOUR_CHAR_CODE('g', 'r', 'p', 'l'),
-  MP4AlternativeEntityGroup                    = MP4_FOUR_CHAR_CODE('a', 'l', 't', 'r')
+  MP4AlternativeEntityGroup                    = MP4_FOUR_CHAR_CODE('a', 'l', 't', 'r'),
+  
+  MP4WaveformSampleEntryAtomType               = MP4_FOUR_CHAR_CODE('m', 'p', '4', 'w'),
+  ISOBGWConfigAtomType                         = MP4_FOUR_CHAR_CODE('b', 'g', 'w', 'C'),
+  ISOBGWSampleEntrySingleTrackAtomType         = MP4_FOUR_CHAR_CODE('b', 'g', 'w', '1'),
+  ISOBGWSampleEntryMultiTrackBaseAtomType      = MP4_FOUR_CHAR_CODE('b', 'g', 'w', 'b'),
+  ISOBGWSampleEntryMultiTrackDerivedAtomType   = MP4_FOUR_CHAR_CODE('b', 'g', 'w', '2')
 
 };
 
@@ -870,6 +876,13 @@ typedef struct MP4VisualSampleEntryAtom
 
 } MP4VisualSampleEntryAtom, *MP4VisualSampleEntryAtomPtr;
 
+typedef struct MP4WaveformSampleEntryAtom
+{
+  MP4_BASE_ATOM
+  COMMON_SAMPLE_ENTRY_FIELDS
+
+} MP4WaveformSampleEntryAtom, *MP4WaveformSampleEntryAtomPtr;
+
 typedef struct MP4VolumetricVisualSampleEntryAtom
 {
   MP4_BASE_ATOM
@@ -1231,6 +1244,38 @@ typedef struct ISOVVCNALUConfigAtom
 
   u32 LengthSizeMinusOne;
 } ISOVVCNALUConfigAtom, *ISOVVCNALUConfigAtomPtr;
+
+typedef struct ISOBGWConfigAtom
+{
+  MP4_FULL_ATOM
+
+  u8 profile_level_idc;               /* unsigned int(8) */
+  u8 normative_encoder_flag;          /* unsigned int(1) */
+  u8 substream_present_flag;          /* unsigned int(1) */
+  u8 cg_info_present_flag;            /* unsigned int(1) */
+  u8 num_substreams;                  /* unsigned int(5) */
+  u16 num_channel_groups;             /* unsigned int(16) */
+
+  struct 
+  {
+    u16 substream_id;
+    u16 channel_group_id;
+    u8 cg_signal_type;
+  } *channelGroups;
+
+  u16 max_channel_count;              /* int(16) */
+  u16 max_sampling_rate_numerator;    /* int(16) */
+  u16 max_sampling_rate_denumerator;  /* int(16) */
+
+  u8 num_of_arrays;                   /* int(8) */
+  struct 
+  {
+    u8 packet_type;                   /* unsigned int(3)[num_of_arrays] */
+    u16 num_packets;   
+    MP4LinkedList packetList;
+  } arrays[3];
+
+} ISOBGWConfigAtom, *ISOBGWConfigAtomPtr;
 
 typedef struct MP4SampleSizeAtom
 {
@@ -2362,6 +2407,7 @@ MP4Err MP4CreateHEVCConfigAtom(ISOHEVCConfigAtomPtr *outAtom);
 MP4Err MP4CreateLHEVCConfigAtom(ISOLHEVCConfigAtomPtr *outAtom);
 MP4Err MP4CreateVVCConfigAtom(ISOVVCConfigAtomPtr *outAtom);
 MP4Err MP4CreateVVCNALUConfigAtom(ISOVVCNALUConfigAtomPtr *outAtom);
+MP4Err MP4CreateBGWConfigAtom(ISOBGWConfigAtomPtr *outAtom);
 
 MP4Err MP4CreateOriginalFormatAtom(MP4OriginalFormatAtomPtr *outAtom);
 MP4Err MP4CreateSchemeInfoAtom(MP4SchemeInfoAtomPtr *outAtom);

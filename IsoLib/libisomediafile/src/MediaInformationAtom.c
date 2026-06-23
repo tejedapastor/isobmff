@@ -515,6 +515,12 @@ static MP4Err addSamples(struct MP4MediaInformationAtom *self, MP4Handle sampleH
   {
     err = stbl->getCurrentDataReferenceIndex(stbl, &dataReferenceIndex);
     if(err) goto bail;
+    // Temporary fix before finding a proper solution to dataReferenceIndex not
+    // being retrieved correctly. @todo Fix
+    if(dataReferenceIndex != 1)
+    {
+      dataReferenceIndex = 1;
+    }
     err = dinf->getOffset(dinf, dataReferenceIndex, &sampleOffset);
     if(err) goto bail;
     err = stbl->addSamples(stbl, sampleCount, sampleOffset, durationsH, sizesH, decodingOffsetsH,

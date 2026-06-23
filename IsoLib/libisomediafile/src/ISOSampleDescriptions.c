@@ -64,6 +64,9 @@ u32 MP4SampleEntryProtos[] = {MP4MPEGSampleEntryAtomType,
                               ISOVVCSampleEntryAtomTypeInBand,
                               ISOVVCSampleEntryAtomTypeOutOfBand,
                               ISOVVCSubpicSampleEntryAtomType,
+                              ISOBGWSampleEntrySingleTrackAtomType,
+                              ISOBGWSampleEntryMultiTrackBaseAtomType,
+                              ISOBGWSampleEntryMultiTrackDerivedAtomType,
                               0};
 #else
 u32 MP4SampleEntryProtos[] = {MP4MPEGSampleEntryAtomType,
@@ -82,6 +85,10 @@ u32 MP4SampleEntryProtos[] = {MP4MPEGSampleEntryAtomType,
                               ISOVVCSampleEntryAtomTypeInBand,
                               ISOVVCSampleEntryAtomTypeOutOfBand,
                               ISOVVCSubpicSampleEntryAtomType,
+                              ISOBGWSampleEntrySingleTrackAtomType,
+                              ISOBGWSampleEntryMultiTrackBaseAtomType,
+                              ISOBGWSampleEntryMultiTrackDerivedAtomType,
+
                               0};
 #endif
 
@@ -2418,4 +2425,48 @@ ISOGetVVCSubpicSampleDescription(MP4Handle sampleEntryH, u32 *dataReferenceIndex
 bail:
   if(entry) entry->destroy((MP4AtomPtr)entry);
   return err;
+}
+
+MP4_EXTERN(MP4Err)
+ISONewBGWSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH, u32 dataReferenceIndex,
+                          MP4GenericAtomRecord decoderConfigRecord)
+{
+  MP4Err MP4CreateWaveformSampleEntryAtom(MP4WaveformSampleEntryAtomPtr * outAtom);
+  MP4Err MP4CreateBGWConfigAtom(ISOBGWConfigAtomPtr * outAtom);
+
+  MP4Err err = MP4NoErr;
+  GenericSampleEntryAtomPtr entry;
+  ISOBGWConfigAtomPtr config;
+  MP4TrackAtomPtr trak;
+
+  config = (ISOBGWConfigAtom *)decoderConfigRecord.data;
+  if(!config) BAILWITHERROR(MP4BadDataErr);
+
+  if((theTrack == NULL) || (sampleDescriptionH == NULL)) BAILWITHERROR(MP4BadParamErr);
+
+  trak = (MP4TrackAtomPtr)theTrack;
+  if(!(trak->newTrackFlags & MP4NewTrackIsWaveform)) BAILWITHERROR(MP4BadParamErr);
+  
+  err = MP4CreateWaveformSampleEntryAtom((MP4WaveformSampleEntryAtomPtr *)&entry);
+  if(err) BAILWITHERROR(err);
+  
+  entry->super = NULL;
+  entry->dataReferenceIndex = dataReferenceIndex;
+  if(entry->dataReferenceIndex != 1)
+  {
+    // Temporary solution before a proper fix. 
+    // @todo find cause of dataReferenceIndex not being properly retrieved.
+    entry->dataReferenceIndex = 1;
+  }
+  entry->type = ISOBGWSampleEntrySingleTrackAtomType;
+
+  err = MP4AddListEntry((void *)config, entry->ExtensionAtomList);
+  if(err) BAILWITHERROR(err);
+
+  err = atomPtrToSampleEntryH(sampleDescriptionH, (MP4AtomPtr)entry);
+  if(err) BAILWITHERROR(err);
+
+  bail:
+    TEST_RETURN(err);
+    return err;
 }
