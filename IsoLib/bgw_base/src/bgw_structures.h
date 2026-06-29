@@ -57,6 +57,7 @@ typedef struct
 {
   u32 total_length;
   u32 stream_packet_header_size;
+  u8 *stream_packet_header_bytes;
   bgw_stream_packet_header* stream_packet_header;
   u32 num_bytes_in_syntax_structure;
   u8 *syntax_structure_bytes;

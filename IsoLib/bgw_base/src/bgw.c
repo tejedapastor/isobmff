@@ -66,12 +66,13 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
 
     bytes = calloc(BGW_MAX_PACKET_HEADER_SIZE, 1);
 
-    while(fread(bytes, BGW_MAX_PACKET_HEADER_SIZE, 1, input))
+    u32 bytesRead;
+    while((bytesRead = (u32)fread(bytes, 1, BGW_MAX_PACKET_HEADER_SIZE, input)) > 0)
     {
         bitsUsedHeader = 0;
         totalPacketBytes = 0;
 
-        err = BitBuffer_Init(&bb, bytes, BGW_MAX_PACKET_HEADER_SIZE); if (err) goto bail;
+        err = BitBuffer_Init(&bb, bytes, bytesRead); if (err) goto bail;
 
         // Packet type
         bitsUsed = read_escaped_value(
@@ -84,20 +85,16 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
         bitsUsedHeader += bitsUsed;
         if(err) goto bail;
 
-        *bytes = *bytes << bitsUsed;
-
         // Packet label
         bitsUsed = read_escaped_value(
-            &bb, 
-            &packetLabel, 
-            BGW_EV_LENGTH_BITS_2_8_32[0], 
+            &bb,
+            &packetLabel,
+            BGW_EV_LENGTH_BITS_2_8_32[0],
             BGW_EV_LENGTH_BITS_2_8_32[1],
-            BGW_EV_LENGTH_BITS_2_8_32[2], 
+            BGW_EV_LENGTH_BITS_2_8_32[2],
             &err);
         bitsUsedHeader += bitsUsed;
         if(err) goto bail;
-
-        *bytes = *bytes << bitsUsed;
 
         // Packet length
         bitsUsed = read_escaped_value(
@@ -109,23 +106,13 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
             &err);
         bitsUsedHeader += bitsUsed;
 
-        totalPacketBytes = (bitsUsedHeader + packetLength * 8)/8;
-
         packetPayload = calloc(1, packetLength);
         if(!packetPayload) goto bail;
 
         fseek(input, offsetBytes + bitsUsedHeader/8, SEEK_SET);
-        fread(packetPayload, packetLength, 1, input);
+        u32 readPayloadBytes = (u32)fread(packetPayload, 1, packetLength, input);
 
-
-        /* // Debug information 
-        printf("New packet:\n");
-        printf("- Type: %d\n", packetType);
-        printf("- Label: %d\n", packetLabel);
-        printf("- Payload length: %d\n", packetLength);
-        printf("- Header length bits: %d\n", bitsUsedHeader);
-        printf("- Package length bytes: %d\n", totalPacketBytes);*/
-
+        totalPacketBytes = bitsUsedHeader/8 + readPayloadBytes;
         offsetBytes += totalPacketBytes;
         fseek(input, offsetBytes, SEEK_SET);
 
@@ -144,7 +131,7 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
 
         // Insert packet data in stream
         bgw_stream_packet* streamPacket = calloc(1, sizeof(bgw_stream_packet));
-        streamPacket->num_bytes_in_syntax_structure = packetLength;
+        streamPacket->num_bytes_in_syntax_structure = readPayloadBytes;
         streamPacket->syntax_structure_bytes = packetPayload;
 
         bgw_stream_packet_header* streamPacketHeader = calloc(1, sizeof(bgw_stream_packet_header));
@@ -154,8 +141,11 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
 
         streamPacket->stream_packet_header = streamPacketHeader;
 
+        streamPacket->stream_packet_header_size = (bitsUsedHeader + 7) / 8;
+        streamPacket->stream_packet_header_bytes = calloc(1, streamPacket->stream_packet_header_size);
+        memcpy(streamPacket->stream_packet_header_bytes, bytes, streamPacket->stream_packet_header_size);
+
         streamPacket->total_length = totalPacketBytes;
-        streamPacket->stream_packet_header_size = bitsUsedHeader / 8;
 
         newStream->stream_packets[numStreamPackets] = streamPacket;
         numStreamPackets++;
@@ -226,6 +216,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
                         goto bail;
                     }
                     (*stream)->waveformParameterSetList = tmpWPSList;
+                    (*stream)->numWPS++;
                 }
 
                 (*stream)->waveformParameterSetList[(*stream)->numWPS - 1] = wpsPacketInfo;
@@ -271,6 +262,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
                     }
 
                     (*stream)->channelGroupParameterSetList = tmpCGPSList;
+                    (*stream)->numCGPS++;
                 }
 
                 (*stream)->channelGroupParameterSetList[(*stream)->numCGPS - 1] = cgpsPacketInfo;
@@ -358,6 +350,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
                     }
 
                     (*stream)->configurationSetList = tmpCSList;
+                    (*stream)->numCS++;
                 }
 
                 (*stream)->configurationSetList[(*stream)->numCS - 1] = csPacketInfo;
@@ -522,10 +515,11 @@ MP4Err bgw_parse_waveform_parameter_set(u8* packetPayload, u32 packetLength, u64
         if(err) goto bail;
         channelGroupInfo->wps_num_channel_group_repetitions = tmp32;
 
-        channelGroupRerefEnableList = calloc(channelGroupInfo->wps_num_channel_group_repetitions, sizeof(u8));
-        channelGroupRerefModeList = calloc(channelGroupInfo->wps_num_channel_group_repetitions, sizeof(u8));
-        channelGroupRerefChannelIdxList = calloc(channelGroupInfo->wps_num_channel_group_repetitions, sizeof(u32));
-        channelGroupStartingPosList = calloc(channelGroupInfo->wps_num_channel_group_repetitions, sizeof(u32));
+        u32 numReps = channelGroupInfo->wps_num_channel_group_repetitions + 1;
+        channelGroupRerefEnableList = calloc(numReps, sizeof(u8));
+        channelGroupRerefModeList = calloc(numReps, sizeof(u8));
+        channelGroupRerefChannelIdxList = calloc(numReps, sizeof(u32));
+        channelGroupStartingPosList = calloc(numReps, sizeof(u32));
 
         if(!channelGroupRerefEnableList || !channelGroupRerefModeList || !channelGroupRerefChannelIdxList
              || !channelGroupStartingPosList)
@@ -533,6 +527,11 @@ MP4Err bgw_parse_waveform_parameter_set(u8* packetPayload, u32 packetLength, u64
             err = MP4BadDataErr;
             goto bail;
         }
+
+        /* Expand channelGroupsInfo to hold all repetitions for this entry */
+        newWPS->channelGroupsInfo = realloc(newWPS->channelGroupsInfo,
+            (newWPS->numChannelGroups + numReps) * sizeof(bgw_wps_channel_group_info*));
+        if(!newWPS->channelGroupsInfo) { err = MP4BadDataErr; goto bail; }
 
         for(j = 0; j <= channelGroupInfo->wps_num_channel_group_repetitions; j++)
         {
@@ -548,15 +547,16 @@ MP4Err bgw_parse_waveform_parameter_set(u8* packetPayload, u32 packetLength, u64
                 // Channel group reref mode
                 tmp32 = GetBits(&bb, 2, &err);
                 if (err) goto bail;
-                channelGroupRerefModeList[newWPS->numChannelGroups] = (u8)tmp32;
+                channelGroupRerefModeList[j] = (u8)tmp32;
 
                 // Channel group reref channel idx
                 tmp32 = read_golomb_uev(&bb, &err);
                 if (err) goto bail;
-                channelGroupRerefChannelIdxList[newWPS->numChannelGroups] = tmp32;
+                channelGroupRerefChannelIdxList[j] = tmp32;
             }
 
-            channelGroupStartingPosList[newWPS->numChannelGroups++] = newWPS->totalNumChannels;
+            channelGroupStartingPosList[j] = newWPS->totalNumChannels;
+            newWPS->channelGroupsInfo[newWPS->numChannelGroups++] = channelGroupInfo;
             newWPS->totalNumChannels += channelGroupInfo->wps_num_channels_in_next_group_minus1 + 1;
         }
 
@@ -570,12 +570,6 @@ MP4Err bgw_parse_waveform_parameter_set(u8* packetPayload, u32 packetLength, u64
         tmp32 = GetBits(&bb, 1, &err);
         if (err) goto bail;
         channelGroupInfo->wps_more_channel_groups_present_flag = (u8)tmp32;
-
-        newWPS->channelGroupsInfo[newWPS->numChannelGroups - 1] = channelGroupInfo;
-        if(channelGroupInfo->wps_more_channel_groups_present_flag)
-        {
-            newWPS->channelGroupsInfo = realloc(newWPS->channelGroupsInfo, (newWPS->numChannelGroups + 1) * sizeof(bgw_wps_channel_group_info*));
-        }
         
     } while (channelGroupInfo->wps_more_channel_groups_present_flag);
     
@@ -591,7 +585,7 @@ MP4Err bgw_parse_waveform_parameter_set(u8* packetPayload, u32 packetLength, u64
         if (err) goto bail;
         newWPS->wps_num_channel_swaps_minus1 = tmp32;
 
-        channelSwapsInfoList = calloc(newWPS->wps_num_channel_swaps_minus1, sizeof(bgw_wps_channel_swaps_info));
+        channelSwapsInfoList = calloc(newWPS->wps_num_channel_swaps_minus1 + 1, sizeof(bgw_wps_channel_swaps_info));
         if(!channelSwapsInfoList)
         {
             err = MP4BadDataErr;
@@ -1164,6 +1158,7 @@ MP4Err bgw_parse_independent_frame(u8* packetPayload, u32 packetLength, bgw_inde
         newIF->if_channel_group_id = tmp32;
     }
 
+    if(newIF->if_channel_group_id >= numChannelGroups) BAILWITHERROR(MP4BadDataErr);
     numChannels = stream->waveformParameterSetList[0]->wps->channelGroupsInfo[newIF->if_channel_group_id]->numChannels;
 
     newIF->if_mean_per_channel = calloc(numChannels, sizeof(u16));

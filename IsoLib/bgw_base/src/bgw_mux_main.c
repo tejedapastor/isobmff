@@ -94,7 +94,7 @@ MP4Err bgw_populate_decoder_config_record(ISOBGWConfigAtomPtr* decoderConfigReco
 
       channelGroup->channel_group_id = j; // TODO: Review channel_group_id
       channelGroup->substream_id = wps->substreamId;
-      channelGroup->cg_signal_type = cs ? cs->cs_wps[0]->cs_signal_type_idx[j] : 0;
+      channelGroup->cg_signal_type = (cs && cs->cs_wps[0]->cs_signal_type_idx) ? cs->cs_wps[0]->cs_signal_type_idx[j] : 0;
 
       channelGroups[j] = channelGroup;
     }
@@ -253,8 +253,8 @@ static MP4Err bgw_add_samples_to_media(ISOTrack trak, ISOMedia media,
 	if (err) BAILWITHERROR(err);
 
   // Copy packet data to sample data
-  memcpy((*sampleDataH), 
-          streamPacket->stream_packet_header, 
+  memcpy((*sampleDataH),
+          streamPacket->stream_packet_header_bytes,
           streamPacket->stream_packet_header_size);
   memcpy((*sampleDataH) + streamPacket->stream_packet_header_size, 
           streamPacket->syntax_structure_bytes, 
