@@ -320,6 +320,12 @@ MP4Err MP4CreateAtom(u32 atomType, MP4AtomPtr *outAtom)
     err = MP4CreateGenericSampleEntryAtom((MP4GenericSampleEntryAtomPtr *)&newAtom);
     break;
 
+  case ISOBGWSampleEntrySingleTrackAtomType:
+  case ISOBGWSampleEntryMultiTrackBaseAtomType:
+  case ISOBGWSampleEntryMultiTrackDerivedAtomType:
+    err = MP4CreateWaveformSampleEntryAtom((MP4WaveformSampleEntryAtomPtr *)&newAtom);
+    break;
+
   case MP4EditAtomType:
     err = MP4CreateEditAtom((MP4EditAtomPtr *)&newAtom);
     break;

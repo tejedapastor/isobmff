@@ -464,6 +464,7 @@ ISONewGeneralSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH,
   MP4Err MP4CreateMPEGSampleEntryAtom(MP4MPEGSampleEntryAtomPtr * outAtom);
   MP4Err MP4CreateVisualSampleEntryAtom(MP4VisualSampleEntryAtomPtr * outAtom);
   MP4Err MP4CreateAudioSampleEntryAtom(MP4AudioSampleEntryAtomPtr * outAtom);
+  MP4Err MP4CreateWaveformSampleEntryAtom(MP4WaveformSampleEntryAtomPtr * outAtom);
 
   MP4Err err;
   GenericSampleEntryAtomPtr entry = NULL;
@@ -495,7 +496,11 @@ ISONewGeneralSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH,
     if(err) goto bail;
     audioSampleEntry->timeScale = (timeScale <= 0xFFFF ? timeScale : 0);
   }
-  else
+  else if(trak->newTrackFlags & MP4NewTrackIsWaveform)
+  {
+    err = MP4CreateWaveformSampleEntryAtom((MP4WaveformSampleEntryAtomPtr *)&entry);
+    if(err) goto bail;
+  } else
   {
     /* this case covers MP4NewTrackIsMetadata */
     err = MP4CreateMPEGSampleEntryAtom((MP4MPEGSampleEntryAtomPtr *)&entry);
@@ -2452,12 +2457,6 @@ ISONewBGWSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH, u32 
   
   entry->super = NULL;
   entry->dataReferenceIndex = dataReferenceIndex;
-  if(entry->dataReferenceIndex != 1)
-  {
-    // Temporary solution before a proper fix. 
-    // @todo find cause of dataReferenceIndex not being properly retrieved.
-    entry->dataReferenceIndex = 1;
-  }
   entry->type = ISOBGWSampleEntrySingleTrackAtomType;
 
   err = MP4AddListEntry((void *)config, entry->ExtensionAtomList);

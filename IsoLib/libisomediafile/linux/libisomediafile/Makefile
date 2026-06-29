@@ -179,7 +179,8 @@ sources = \
 	SingleItemTypeReferenceAtom.c \
 	ItemPropertiesAtom.c \
 	ItemPropertyAssociationAtom.c \
-	ItemPropertyContainerAtom.c
+	ItemPropertyContainerAtom.c \
+	BGWConfigAtom.c
 
 
 

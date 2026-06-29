@@ -153,8 +153,8 @@ MP4Err bgw_populate_decoder_config_record(ISOBGWConfigAtomPtr* decoderConfigReco
     err = ISONewHandle(wpsPacketData->packet_length, &(wpsPacketData->packet));
     if(err) BAILWITHERROR(err);
 
-    memcpy(wpsPacketData->packet, 
-      stream->waveformParameterSetList[i]->packet_data, 
+    memcpy(*wpsPacketData->packet,
+      stream->waveformParameterSetList[i]->packet_data,
       stream->waveformParameterSetList[i]->packet_length);
 
     err = MP4AddListEntry(wpsPacketData->packet, (*decoderConfigRecord)->arrays[0].packetList);
@@ -164,11 +164,7 @@ MP4Err bgw_populate_decoder_config_record(ISOBGWConfigAtomPtr* decoderConfigReco
   
   // CGPS packet list
   (*decoderConfigRecord)->arrays[1].packet_type = BGW_CGPS_SPT;
-  //(*decoderConfigRecord)->arrays[1].num_packets = stream->numCGPS;
-
-  // Temporary action to avoid error when treating CGPS packets
-  // @todo Find error source and fix
-  (*decoderConfigRecord)->arrays[1].num_packets = 0;
+  (*decoderConfigRecord)->arrays[1].num_packets = stream->numCGPS;
 
   for(i = 0; i < stream->numCGPS; i++)
   {
@@ -181,12 +177,12 @@ MP4Err bgw_populate_decoder_config_record(ISOBGWConfigAtomPtr* decoderConfigReco
     err = ISONewHandle(cgpsPacketData->packet_length, &(cgpsPacketData->packet));
     if(err) BAILWITHERROR(err);
 
-    memcpy(cgpsPacketData->packet, 
-      stream->channelGroupParameterSetList[i]->packet_data, 
+    memcpy(*cgpsPacketData->packet,
+      stream->channelGroupParameterSetList[i]->packet_data,
       stream->channelGroupParameterSetList[i]->packet_length);
 
-    //err = MP4AddListEntry(cgpsPacketData->packet, (*decoderConfigRecord)->arrays[1].packetList);
-    //if(err) BAILWITHERROR(err);
+    err = MP4AddListEntry(cgpsPacketData->packet, (*decoderConfigRecord)->arrays[1].packetList);
+    if(err) BAILWITHERROR(err);
   }
   
   // CS packet list
@@ -204,8 +200,8 @@ MP4Err bgw_populate_decoder_config_record(ISOBGWConfigAtomPtr* decoderConfigReco
     err = ISONewHandle(csPacketData->packet_length, &(csPacketData->packet));
     if(err) BAILWITHERROR(err);
 
-    memcpy(csPacketData->packet, 
-      stream->configurationSetList[i]->packet_data, 
+    memcpy(*csPacketData->packet,
+      stream->configurationSetList[i]->packet_data,
       stream->configurationSetList[i]->packet_length);
 
     err = MP4AddListEntry(csPacketData->packet, (*decoderConfigRecord)->arrays[2].packetList);
@@ -343,7 +339,8 @@ MP4Err bgw_create_MP4_file(bgw_params *parameters, bgw_stream* stream)
   u64 mediaDuration;
 
   char *filename = parameters->output ? parameters->output : "bgw_mov.mp4";
-  err = ISONoErr;
+  err  = ISONoErr;
+  moov = NULL;
 
   initialObjectDescriptorID = 0;
   OD_profileAndLevel        = 0xff; /* none required */
@@ -403,19 +400,22 @@ MP4Err bgw_create_MP4_file(bgw_params *parameters, bgw_stream* stream)
 
   // Write movie to MP4 file
   err = ISOWriteMovieToFile(moov, filename);
-  if(err) goto bail;
+  if(err)
+  {
+    remove(filename);
+    goto bail;
+  }
 
   // Clean movie
   err = ISODisposeMovie(moov);
+  moov = NULL;
   if(err) goto bail;
 
-  if(!err)
-  {
-    fprintf(stdout, "The MP4 file %s has been created successfully\n", filename);
-  }
+  fprintf(stdout, "The MP4 file %s has been created successfully\n", filename);
   return err;
 
 bail:
+  if(moov) ISODisposeMovie(moov);
   TEST_RETURN(err);
   return err;
 }

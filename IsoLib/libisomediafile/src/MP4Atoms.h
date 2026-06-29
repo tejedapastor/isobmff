@@ -2336,6 +2336,7 @@ MP4Err MP4CreateEditAtom(MP4EditAtomPtr *outAtom);
 MP4Err MP4CreateEditListAtom(MP4EditListAtomPtr *outAtom);
 MP4Err MP4CreateFreeSpaceAtom(MP4FreeSpaceAtomPtr *outAtom);
 MP4Err MP4CreateGenericSampleEntryAtom(MP4GenericSampleEntryAtomPtr *outAtom);
+MP4Err MP4CreateWaveformSampleEntryAtom(MP4WaveformSampleEntryAtomPtr *outAtom);
 MP4Err MP4CreateHandlerAtom(MP4HandlerAtomPtr *outAtom);
 MP4Err MP4CreateHintMediaHeaderAtom(MP4HintMediaHeaderAtomPtr *outAtom);
 MP4Err MP4CreateMPEGMediaHeaderAtom(MP4MPEGMediaHeaderAtomPtr *outAtom);

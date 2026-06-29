@@ -98,27 +98,32 @@ The following are some of the valid targets for this Makefile:
 ... all (the default if no target is provided)
 ... clean
 ... depend
-... rebuild_cache
 ... edit_cache
-... libuniDrcBitstreamDecoderLib
-... libwavIO
-... libreadonlybitbuf
-... libwriteonlybitbuf
-... TLibDecoder
-... TLibCommon
-... libisomediafile
-... makeAudioMovieSample
-... playAudioMovieSample
+... rebuild_cache
 ... DRC_to_MP4
 ... MP4_to_DRC
-... hevc_muxer
+... MP4_to_WAV
+... TLibCommon
+... TLibDecoder
+... WAV_to_MP4
+... bgw_demuxer
+... bgw_muxer
 ... hevc_demuxer
 ... hevc_extractors
-... protectAudioMovie
-... libisoiff
+... hevc_muxer
 ... isoiff_tool
-... WAV_to_MP4
-... MP4_to_WAV
+... libisoiff
+... libisomediafile
+... libreadonlybitbuf
+... libuniDrcBitstreamDecoderLib
+... libwavIO
+... libwriteonlybitbuf
+... makeAudioMovieSample
+... playAudioMovieSample
+... protectAudioMovie
+... unit_tests
+... vvc_demuxer
+... vvc_muxer
 ```
 
 ### Code Formatting (clang-format)
