@@ -32,6 +32,8 @@
 #include "bgw_structures.h"
 #include "bgw_tools.h"
 
+u32 DEFAULT_SAMPLE_DURATION = 10;
+
 MP4Err BitBuffer_Init(BitBuffer *bb, u8 *p, u32 length) {
 	int err = MP4NoErr;
 

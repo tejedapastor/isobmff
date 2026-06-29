@@ -448,8 +448,7 @@ int main(int argc, char *argv[])
 
   if(!inputParams->sample_duration)
   {
-    // @todo Define a proper default sample duration
-    inputParams->sample_duration = 10;
+    inputParams->sample_duration = DEFAULT_SAMPLE_DURATION;
   }
 
   FILE *inputFile = fopen(inputParams->input, "rb");

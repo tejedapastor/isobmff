@@ -90,6 +90,10 @@ enum
   BGW_WAVEFORM_TYPE_WT_BS2088 = 1
 };
 
+/* Default sample duration */
+// @todo Define a proper default sample duration
+u32 DEFAULT_SAMPLE_DURATION;
+
 /**
  * @brief Initializes a bit buffer to retrieve a sequence of bits.
  * @param bb BitBuffer struct.
