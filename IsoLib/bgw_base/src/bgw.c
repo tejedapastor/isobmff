@@ -72,7 +72,7 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
         bitsUsedHeader = 0;
         totalPacketBytes = 0;
 
-        err = BitBuffer_Init(&bb, bytes, bytesRead); if (err) goto bail;
+        err = bit_buffer_init(&bb, bytes, bytesRead); if (err) goto bail;
 
         // Packet type
         bitsUsed = read_escaped_value(
@@ -84,6 +84,10 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
             &err);
         bitsUsedHeader += bitsUsed;
         if(err) goto bail;
+
+        // Types above BGW_CONFIG_SET_SPT (19) are reserved; treat as FORBIDDEN.
+        if(packetType > BGW_CONFIG_SET_SPT)
+            packetType = BGW_FORBIDDEN_SPT;
 
         // Packet label
         bitsUsed = read_escaped_value(
@@ -120,15 +124,6 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
 
         err = bgw_check_new_label(&streamPacketLabels, &numDifferentLabels, packetLabel);
 
-        err = bgw_handle_packet_data(packetType, packetLength, packetPayload, packetLabel, &newStream);
-
-        // Reallocate packet data in stream
-        if(numStreamPackets == numAllocatedStreamPackets)
-        {
-            newStream->stream_packets = realloc(newStream->stream_packets, 2 * numAllocatedStreamPackets * sizeof(bgw_stream_packet));
-            numAllocatedStreamPackets *= 2;
-        }
-
         // Insert packet data in stream
         bgw_stream_packet* streamPacket = calloc(1, sizeof(bgw_stream_packet));
         streamPacket->num_bytes_in_syntax_structure = readPayloadBytes;
@@ -146,6 +141,17 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
         memcpy(streamPacket->stream_packet_header_bytes, bytes, streamPacket->stream_packet_header_size);
 
         streamPacket->total_length = totalPacketBytes;
+
+
+        err = bgw_handle_packet_data(streamPacket, numStreamPackets, &newStream);
+        if(err) BAILWITHERROR(err);
+
+        // Reallocate packet data in stream
+        if(numStreamPackets == numAllocatedStreamPackets)
+        {
+            newStream->stream_packets = realloc(newStream->stream_packets, 2 * numAllocatedStreamPackets * sizeof(bgw_stream_packet));
+            numAllocatedStreamPackets *= 2;
+        }
 
         newStream->stream_packets[numStreamPackets] = streamPacket;
         numStreamPackets++;
@@ -169,10 +175,17 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream)
         return MP4NoErr;
 }
 
-MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayload, u64 packetLabel, bgw_stream** stream)
+MP4Err bgw_handle_packet_data(bgw_stream_packet* streamPacket, u32 numStreamPacket, bgw_stream** stream)
 {
     MP4Err err = MP4NoErr;
     int i;
+
+    if(!streamPacket || !streamPacket->stream_packet_header) BAILWITHERROR(MP4BadDataErr);
+
+    u32 packetType = streamPacket->stream_packet_header->stream_packet_type;
+    u32 packetLabel = streamPacket->stream_packet_header->stream_packet_label;
+    u32 packetPayloadLength = streamPacket->stream_packet_header->stream_packet_length;
+    u8* packetPayload = streamPacket->syntax_structure_bytes;
 
     switch(packetType)
     {
@@ -181,7 +194,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
         case BGW_WPS_SPT:
             {
                 bgw_waveform_parameter_set* wps;
-                err = bgw_parse_waveform_parameter_set(packetPayload, packetLength, packetLabel, &wps);
+                err = bgw_parse_waveform_parameter_set(packetPayload, packetPayloadLength, packetLabel, &wps);
                 if(err) goto bail;
 
                 bgw_wps_packet_info* wpsPacketInfo;
@@ -193,7 +206,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
                 }
 
                 wpsPacketInfo->packet_type = packetType;
-                wpsPacketInfo->packet_length = packetLength;
+                wpsPacketInfo->packet_length = packetPayloadLength;
                 wpsPacketInfo->packet_data = packetPayload;
                 wpsPacketInfo->wps = wps;
 
@@ -226,7 +239,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
         case BGW_CGPS_SPT:
             {
                 bgw_channel_group_parameter_set* cgps;
-                err = bgw_parse_channel_group_parameter_set(packetPayload, packetLength, &cgps);
+                err = bgw_parse_channel_group_parameter_set(packetPayload, packetPayloadLength, &cgps);
                 if(err) goto bail;
 
                 bgw_cgps_packet_info* cgpsPacketInfo;
@@ -238,7 +251,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
                 }
 
                 cgpsPacketInfo->packet_type = packetType;
-                cgpsPacketInfo->packet_length = packetLength;
+                cgpsPacketInfo->packet_length = packetPayloadLength;
                 cgpsPacketInfo->packet_data = packetPayload;
                 cgpsPacketInfo->cgps = cgps;
 
@@ -274,18 +287,17 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
         case BGW_IF_SPT:
             {
                 bgw_independent_frame* independentFrame;
-                err = bgw_parse_independent_frame(packetPayload, packetLength, &independentFrame, *stream); if(err) BAILWITHERROR(err);
-                err = bgw_create_new_frame_sequence(independentFrame, stream); if(err) BAILWITHERROR(err);
+                err = bgw_parse_independent_frame(packetPayload, packetPayloadLength, &independentFrame, *stream); if(err) BAILWITHERROR(err);
+                err = bgw_create_new_frame_sequence(independentFrame, numStreamPacket, stream); if(err) BAILWITHERROR(err);
 
                 if(err) goto bail;
                 break;
             }
-                
         case BGW_DF_SPT:
             {
                 bgw_dependent_frame* dependentFrame;
-                err = bgw_parse_dependent_frame(packetPayload, packetLength, &dependentFrame, *stream); if(err) BAILWITHERROR(err);
-                err = bgw_insert_df_in_frame_sequence(dependentFrame, stream); if(err) BAILWITHERROR(err);
+                err = bgw_parse_dependent_frame(packetPayload, packetPayloadLength, &dependentFrame, *stream); if(err) BAILWITHERROR(err);
+                err = bgw_insert_df_in_frame_sequence(dependentFrame, numStreamPacket, stream); if(err) BAILWITHERROR(err);
 
                 if(err) goto bail;
                 break;
@@ -306,7 +318,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
         case BGW_AM_SPT:
             {
                 bgw_auxiliary_metadata* auxiliaryMetadata;
-                err = bgw_parse_auxiliary_metadata(packetPayload, packetLength, &auxiliaryMetadata);
+                err = bgw_parse_auxiliary_metadata(packetPayload, packetPayloadLength, &auxiliaryMetadata);
                 if(err) goto bail;
                 (*stream)->auxiliaryMetadata = auxiliaryMetadata;
                 break;
@@ -314,7 +326,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
         case BGW_CONFIG_SET_SPT:
             {
                 bgw_configuration_set* cs;
-                err = bgw_parse_configuration_set(packetPayload, packetLength, &cs);
+                err = bgw_parse_configuration_set(packetPayload, packetPayloadLength, &cs);
                 if(err) goto bail;
 
                 bgw_cs_packet_info* csPacketInfo;
@@ -326,7 +338,7 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
                 }
 
                 csPacketInfo->packet_type = packetType;
-                csPacketInfo->packet_length = packetLength;
+                csPacketInfo->packet_length = packetPayloadLength;
                 csPacketInfo->packet_data = packetPayload;
                 csPacketInfo->cs = cs;
 
@@ -364,9 +376,9 @@ MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayloa
         return err;
 }
 
-MP4Err bgw_create_new_frame_sequence(bgw_independent_frame* independentFrame, bgw_stream** stream)
+MP4Err bgw_create_new_frame_sequence(bgw_independent_frame* independentFrame, u32 ifPacketIdx, bgw_stream** stream)
 {
-    MP4Err err;
+    MP4Err err = MP4NoErr;
 
     // Create frame sequence
     if(!(*stream)->frameSequences)
@@ -387,6 +399,35 @@ MP4Err bgw_create_new_frame_sequence(bgw_independent_frame* independentFrame, bg
     frameSequence->channelGroupId = independentFrame->if_channel_group_id;
     frameSequence->independentFrame = independentFrame;
     frameSequence->numDependentFrames = 0;
+    frameSequence->ifPacketIdx = ifPacketIdx;
+    
+    // Print frame sequence information
+    // @todo Temporary until a frame sequences is inserted into a sample.
+    u32 nCG = 0, nCh = 0;
+    int hasCGPS = ((*stream)->numCGPS > 0 &&
+                    (*stream)->channelGroupParameterSetList[0] != NULL);
+    bgw_wps_packet_info* wpsInfo = ((*stream)->numWPS > 0) ? (*stream)->waveformParameterSetList[0] : NULL;
+    int hasWPS = (wpsInfo != NULL && wpsInfo->wps != NULL);
+    if(hasWPS) {
+        nCG = wpsInfo->wps->numChannelGroups;
+        if(wpsInfo->wps->channelGroupsInfo && wpsInfo->wps->channelGroupsInfo[0])
+            nCh = wpsInfo->wps->channelGroupsInfo[0]->numChannels;
+    }
+    if(hasCGPS) {
+        bgw_channel_group_parameter_set* cgps = (*stream)->channelGroupParameterSetList[0]->cgps;
+        fprintf(stdout, "Frame sequence %u: numCG=%u numCh=%u"
+                " cgps_length_signal_mode_flag=%u cgps_frame_length_shift=%u"
+                " if_indep_num_samples_per_channel_minus1=%u\n",
+                (*stream)->numFrameSequences, nCG, nCh,
+                cgps->cgps_length_signal_mode_flag,
+                cgps->cgps_frame_length_shift,
+                independentFrame->if_indep_num_samples_per_channel_minus1);
+    } else {
+        fprintf(stdout, "Frame sequence %u: numCG=%u numCh=%u (no CGPS)"
+                " if_indep_num_samples_per_channel_minus1=%u\n",
+                (*stream)->numFrameSequences, nCG, nCh,
+                independentFrame->if_indep_num_samples_per_channel_minus1);
+    }
     
     (*stream)->frameSequences[(*stream)->numFrameSequences] = frameSequence;
     (*stream)->numFrameSequences++;
@@ -396,32 +437,35 @@ bail:
     return err;
 }
 
-MP4Err bgw_insert_df_in_frame_sequence(bgw_dependent_frame* dependentFrame, bgw_stream** stream)
+MP4Err bgw_insert_df_in_frame_sequence(bgw_dependent_frame* dependentFrame, u32 dfPacketIndex, bgw_stream** stream)
 {
-    MP4Err err;
+    MP4Err err = MP4NoErr;
 
     u32 numFrameSequences = (*stream)->numFrameSequences;
     if(!numFrameSequences) BAILWITHERROR(MP4BadDataErr);
 
+    bgw_frame_sequence* fs = (*stream)->frameSequences[numFrameSequences - 1];
+    if(!fs) BAILWITHERROR(MP4BadDataErr);
+
     u32 numDependentFrames;
 
-    if(!(*stream)->frameSequences[numFrameSequences - 1]) BAILWITHERROR(MP4BadDataErr);
-    if(!(*stream)->frameSequences[numFrameSequences - 1]->numDependentFrames)
+    if(!fs->numDependentFrames)
     {
-        (*stream)->frameSequences[numFrameSequences - 1]->dependentFrames = calloc(1, sizeof(bgw_dependent_frame*));
+        fs->dependentFrames = calloc(1, sizeof(bgw_dependent_frame*));
+        fs->dfPacketIndices = calloc(1, sizeof(u32));
         numDependentFrames = 0;
     } else
     {
-        numDependentFrames = (*stream)->frameSequences[numFrameSequences - 1]->numDependentFrames;
-        (*stream)->frameSequences[numFrameSequences - 1]->dependentFrames 
-            = realloc((*stream)->frameSequences[numFrameSequences - 1]->dependentFrames, 
-                (numDependentFrames + 1) * sizeof(bgw_dependent_frame*));
+        numDependentFrames = fs->numDependentFrames;
+        fs->dependentFrames = realloc(fs->dependentFrames, (numDependentFrames + 1) * sizeof(bgw_dependent_frame*));
+        fs->dfPacketIndices = realloc(fs->dfPacketIndices, (numDependentFrames + 1) * sizeof(u32));
     }
 
-    if(!(*stream)->frameSequences[numFrameSequences - 1]->dependentFrames) BAILWITHERROR(MP4NoMemoryErr);
+    if(!fs->dependentFrames || !fs->dfPacketIndices) BAILWITHERROR(MP4NoMemoryErr);
 
-    (*stream)->frameSequences[numFrameSequences - 1]->dependentFrames[numDependentFrames] = dependentFrame;
-    (*stream)->frameSequences[numFrameSequences - 1]->numDependentFrames++;
+    fs->dependentFrames[numDependentFrames] = dependentFrame;
+    fs->dfPacketIndices[numDependentFrames] = dfPacketIndex;
+    fs->numDependentFrames++;
 
 bail:
     TEST_RETURN(err);
@@ -477,9 +521,9 @@ MP4Err bgw_parse_waveform_parameter_set(u8* packetPayload, u32 packetLength, u64
     if(!newWPS) goto bail;
 
     BitBuffer bb;
-    err = BitBuffer_Init(&bb, packetPayload, packetLength); if (err) goto bail;
+    err = bit_buffer_init(&bb, packetPayload, packetLength); if (err) goto bail;
 
-    tmp32 = GetBits(&bb, 4, &err);
+    tmp32 = get_bits(&bb, 4, &err);
     if (err) goto bail;
 
     newWPS->wps_waveform_parameter_set_id = (u8)tmp32;
@@ -538,14 +582,14 @@ MP4Err bgw_parse_waveform_parameter_set(u8* packetPayload, u32 packetLength, u64
             numChannels = channelGroupInfo->wps_num_channels_in_next_group_minus1 + 1;
 
             // Channel group reref enable
-            tmp32 = GetBits(&bb, 1, &err);
+            tmp32 = get_bits(&bb, 1, &err);
             if (err) goto bail;
             channelGroupRerefEnableList[j] = (u8)tmp32;
 
             if(channelGroupRerefEnableList[j])
             {
                 // Channel group reref mode
-                tmp32 = GetBits(&bb, 2, &err);
+                tmp32 = get_bits(&bb, 2, &err);
                 if (err) goto bail;
                 channelGroupRerefModeList[j] = (u8)tmp32;
 
@@ -567,14 +611,14 @@ MP4Err bgw_parse_waveform_parameter_set(u8* packetPayload, u32 packetLength, u64
         channelGroupInfo->channelGroupStartingPos = channelGroupStartingPosList;
 
         // More channel groups present flag
-        tmp32 = GetBits(&bb, 1, &err);
+        tmp32 = get_bits(&bb, 1, &err);
         if (err) goto bail;
         channelGroupInfo->wps_more_channel_groups_present_flag = (u8)tmp32;
         
     } while (channelGroupInfo->wps_more_channel_groups_present_flag);
     
     // Channel reordering flag
-    tmp32 = GetBits(&bb, 1, &err);
+    tmp32 = get_bits(&bb, 1, &err);
     if (err) goto bail;
     newWPS->wps_channel_reordering_flag = (u8)tmp32;
 
@@ -643,20 +687,24 @@ MP4Err bgw_parse_channel_group_parameter_set(u8* packetPayload, u32 packetLength
     if(!newCGPS) goto bail;
 
     BitBuffer bb;
-    err = BitBuffer_Init(&bb, packetPayload, packetLength); if (err) goto bail;
+    err = bit_buffer_init(&bb, packetPayload, packetLength); if (err) goto bail;
 
     // Channel group parameter set ID
-    err = GetBytes(&bb, 1, &tmp8);
+    err = get_bytes(&bb, 1, &tmp8);
     if (err) goto bail;
     newCGPS->cgps_channel_group_parameter_set_id = tmp8;
     
     // Waveform parameter set ID
-    tmp32 = GetBits(&bb, 4, &err);
+    tmp32 = get_bits(&bb, 4, &err);
     if (err) goto bail;
     newCGPS->cgps_waveform_parameter_set_id = (u8)tmp32;
 
-    err = GetBytes(&bb, 2, (u8*)&tmp16);
+    /* Read 2 bytes as a big-endian 16-bit word using get_bits to avoid
+     * endianness issues (get_bytes stores MSB first in memory, which on
+     * little-endian would be the low byte of a u16). */
+    tmp32 = get_bits(&bb, 16, &err);
     if (err) goto bail;
+    tmp16 = (u16)tmp32;
 
     // Length signal mode flag
     newCGPS->cgps_length_signal_mode_flag = tmp16 >> 15;
@@ -674,46 +722,46 @@ MP4Err bgw_parse_channel_group_parameter_set(u8* packetPayload, u32 packetLength
     newCGPS->cgps_max_bit_depth = tmp16;
 
     // Allow cross channel pred flag
-    tmp32 = GetBits(&bb, 1, &err);
+    tmp32 = get_bits(&bb, 1, &err);
     if (err) goto bail;
     newCGPS->cgps_allow_cross_channel_pred_flag = (u8)tmp32;
 
     if(newCGPS->cgps_allow_cross_channel_pred_flag)
     {
         // CC pred filtering mode
-        tmp32 = GetBits(&bb, 2, &err);
+        tmp32 = get_bits(&bb, 2, &err);
         if (err) goto bail;
         newCGPS->cgps_cc_pred_filtering_mode = (u8)tmp32;
 
         // Allow cc pred mult hyp flag
-        tmp32 = GetBits(&bb, 1, &err);
+        tmp32 = get_bits(&bb, 1, &err);
         if (err) goto bail;
         newCGPS->cgps_allow_cc_pred_mult_hyp_flag = (u8)tmp32;
     }
 
     // Allow block matching pred flag
-    tmp32 = GetBits(&bb, 1, &err);
+    tmp32 = get_bits(&bb, 1, &err);
     if (err) goto bail;
     newCGPS->cgps_allow_block_matching_pred_flag = (u8)tmp32;
 
     if(newCGPS->cgps_allow_block_matching_pred_flag)
     {
         // BM pred filtering mode
-        tmp8 = GetBits(&bb, 2, &err);
+        tmp8 = get_bits(&bb, 2, &err);
         if (err) goto bail;
         newCGPS->cgps_bm_pred_filtering_mode = tmp8;
         
         // Allow BM pred mult hyp flag
-        tmp8 = GetBits(&bb, 1, &err);
+        tmp8 = get_bits(&bb, 1, &err);
         if (err) goto bail;
         newCGPS->cgps_allow_bm_pred_mult_hyp_flag = tmp8;
 
         // Allow BM offset pred prev ch flag
-        tmp8 = GetBits(&bb, 1, &err);
+        tmp8 = get_bits(&bb, 1, &err);
         if (err) goto bail;
         newCGPS->cgps_allow_bm_offset_pred_prev_ch_flag = tmp8;
 
-        tmp8 = GetBits(&bb, 4, &err);
+        tmp8 = get_bits(&bb, 4, &err);
         if (err) goto bail;
 
         // Allow DC pred flag
@@ -730,12 +778,12 @@ MP4Err bgw_parse_channel_group_parameter_set(u8* packetPayload, u32 packetLength
 
         if(newCGPS->cgps_allow_lpf_flag)
         {
-            tmp8 = GetBits(&bb, 1, &err);
+            tmp8 = get_bits(&bb, 1, &err);
             if (err) goto bail;
             newCGPS->cgps_lpf_allow_prev_ch_flag = tmp8;
         }
 
-        tmp32 = GetBits(&bb, 20, &err);
+        tmp32 = get_bits(&bb, 20, &err);
         if (err) goto bail;
 
         // Allow transform skip flag
@@ -756,12 +804,12 @@ MP4Err bgw_parse_channel_group_parameter_set(u8* packetPayload, u32 packetLength
         if(newCGPS->cgps_allow_transform_skip_flag)
         {
             // Allow verbatim coding flag
-            tmp8 = GetBits(&bb, 1, &err);
+            tmp8 = get_bits(&bb, 1, &err);
             if (err) goto bail;
             newCGPS->cgps_allow_verbatim_coding_flag = tmp8;
         }
 
-        tmp8 = GetBits(&bb, 2, &err);
+        tmp8 = get_bits(&bb, 2, &err);
         if (err) goto bail;
 
         // Allow zero lsb flag
@@ -772,7 +820,7 @@ MP4Err bgw_parse_channel_group_parameter_set(u8* packetPayload, u32 packetLength
 
         if(newCGPS->cgps_allow_lms_flag)
         {
-            tmp8 = GetBits(&bb, 6, &err);
+            tmp8 = get_bits(&bb, 6, &err);
             if (err) goto bail;
 
             // Allow lms split flag
@@ -787,14 +835,14 @@ MP4Err bgw_parse_channel_group_parameter_set(u8* packetPayload, u32 packetLength
             if (newCGPS->cgps_allow_cc_lms_flag)
             {
                 // Max order cc lms minus1
-                tmp8 = GetBits(&bb, 6, &err);
+                tmp8 = get_bits(&bb, 6, &err);
                 if (err) goto bail;
                 newCGPS->cgps_max_order_cc_lms_minus1 = tmp8;
             }
         }
 
         // Ctx init flag
-        tmp8 = GetBits(&bb, 1, &err);
+        tmp8 = get_bits(&bb, 1, &err);
         if (err) goto bail;
         newCGPS->cgps_ctx_init_flag = tmp8;
     }
@@ -822,12 +870,12 @@ MP4Err bgw_parse_configuration_set(u8* packetPayload, u32 packetLength, bgw_conf
     bgw_configuration_set* newConfigurationSet;
 
     BitBuffer bb;
-    err = BitBuffer_Init(&bb, packetPayload, packetLength); 
+    err = bit_buffer_init(&bb, packetPayload, packetLength); 
     if (err) BAILWITHERROR(err);
 
     newConfigurationSet = calloc(1, sizeof(bgw_configuration_set));
 
-    tmp32 = GetBits(&bb, 4, &err);
+    tmp32 = get_bits(&bb, 4, &err);
     if (err) BAILWITHERROR(err);
 
     newConfigurationSet->cs_num_wps_ids = tmp32;
@@ -843,12 +891,12 @@ MP4Err bgw_parse_configuration_set(u8* packetPayload, u32 packetLength, bgw_conf
         if(!wps) BAILWITHERROR(MP4BadDataErr);
 
         // WPS ID
-        tmp32 = GetBits(&bb, 4, &err);
+        tmp32 = get_bits(&bb, 4, &err);
         if (err) BAILWITHERROR(err);
         wps->cs_wps_id = (u8)tmp32;
 
         // Label mapping flag
-        tmp32 = GetBits(&bb, 1, &err);
+        tmp32 = get_bits(&bb, 1, &err);
         if (err) BAILWITHERROR(err);
         wps->cs_label_mapping_flag = (u8)tmp32;
 
@@ -886,7 +934,7 @@ MP4Err bgw_parse_configuration_set(u8* packetPayload, u32 packetLength, bgw_conf
         wps->cs_num_channel_groups_in_wps = tmp32;
 
         // Num sampling freqs in WPS
-        tmp32 = GetBits(&bb, 4, &err);
+        tmp32 = get_bits(&bb, 4, &err);
         if (err) BAILWITHERROR(err);
         wps->cs_num_sampling_freqs_in_wps = (u8)tmp32;
 
@@ -905,14 +953,14 @@ MP4Err bgw_parse_configuration_set(u8* packetPayload, u32 packetLength, bgw_conf
             for(cg = 0; cg < wps->cs_num_channel_groups_in_wps; cg++)
             {
                 //Sampling freq idx
-                tmp32 = GetBits(&bb, ceil_log2(wps->cs_num_sampling_freqs_in_wps), &err);
+                tmp32 = get_bits(&bb, ceil_log2(wps->cs_num_sampling_freqs_in_wps), &err);
                 if(err) BAILWITHERROR(err);
                 wps->cs_sampling_freq_idx[cg] = tmp32;
             }
         }
 
         // Num signal types in WPS
-        tmp32 = GetBits(&bb, 4, &err);
+        tmp32 = get_bits(&bb, 4, &err);
         if (err) BAILWITHERROR(err);
         wps->cs_num_signal_types_in_wps = (u8)tmp32;
         wps->cs_signal_info = calloc(wps->cs_num_signal_types_in_wps, sizeof(bgw_configuration_set_wps_signal));
@@ -957,14 +1005,14 @@ MP4Err bgw_parse_configuration_set(u8* packetPayload, u32 packetLength, bgw_conf
             for(cg = 0; cg < wps->cs_num_channel_groups_in_wps; cg++)
             {
                 // Signal type idx
-                tmp32 = GetBits(&bb, ceil_log2(wps->cs_num_signal_types_in_wps), &err);
+                tmp32 = get_bits(&bb, ceil_log2(wps->cs_num_signal_types_in_wps), &err);
                 if(err) BAILWITHERROR(err);
                 wps->cs_signal_type_idx[cg] = tmp32;
             }
         }
 
         // Signal info data flag in WPS flag
-        tmp32 = GetBits(&bb, 1, &err);
+        tmp32 = get_bits(&bb, 1, &err);
         if(err) BAILWITHERROR(err);
         wps->cs_signal_info_data_flag_in_wps_flag = (u8)tmp32;
 
@@ -975,7 +1023,7 @@ MP4Err bgw_parse_configuration_set(u8* packetPayload, u32 packetLength, bgw_conf
             {
                 bgw_configuration_set_signal_info_data *signalInfoData = &(wps->cs_signal_info_data)[cg];
 
-                tmp32 = GetBits(&bb, 1, &err);
+                tmp32 = get_bits(&bb, 1, &err);
                 if(err) BAILWITHERROR(err);
                 signalInfoData->cs_has_range_info_flag = (u8)tmp32;
 
@@ -1001,14 +1049,13 @@ MP4Err bgw_parse_configuration_set(u8* packetPayload, u32 packetLength, bgw_conf
                     if(err) BAILWITHERROR(err);
                     signalInfoData->cs_analogue_max = tmps32;
 
-                    // Analogue units
-                    tmps32 = read_golomb_sev(&bb, &err);
+                    // Analogue units — st(v): null-terminated UTF-8 string
+                    signalInfoData->cs_analogue_units = read_string_stv(&bb, &err);
                     if(err) BAILWITHERROR(err);
-                    signalInfoData->cs_analogue_units = tmps32;
                 }
 
                 // Recording start time flag
-                tmp32 = GetBits(&bb, 1, &err);
+                tmp32 = get_bits(&bb, 1, &err);
                 if(err) BAILWITHERROR(err);
                 signalInfoData->cs_recording_start_time_flag = (u8)tmp32;
             }
@@ -1018,13 +1065,13 @@ MP4Err bgw_parse_configuration_set(u8* packetPayload, u32 packetLength, bgw_conf
     }
 
     // Config extension flag
-    tmp32 = GetBits(&bb, 1, &err);
+    tmp32 = get_bits(&bb, 1, &err);
     if(err) BAILWITHERROR(err);
     newConfigurationSet->cs_config_extension_flag = (u8)tmp32;
 
     if(newConfigurationSet->cs_config_extension_flag)
     {
-        //TODO CONFIG EXTENSION DATA
+        //@todo Config Extension Data
     }
 
     *configurationSet = newConfigurationSet;
@@ -1047,19 +1094,19 @@ MP4Err bgw_parse_auxiliary_metadata(u8* packetPayload, u32 packetLength, bgw_aux
     u32 k;
 
     BitBuffer bb;
-    err = BitBuffer_Init(&bb, packetPayload, packetLength); if (err) goto bail;
+    err = bit_buffer_init(&bb, packetPayload, packetLength); if (err) goto bail;
 
     bgw_auxiliary_metadata* newAuxiliaryMetadata;
 
     newAuxiliaryMetadata = calloc(1, sizeof(bgw_auxiliary_metadata));
     
     // Header CRC32
-    err = GetBytes(&bb, 4, (u8*)&tmp32);
+    err = get_bytes(&bb, 4, (u8*)&tmp32);
     if(err) goto bail;
     newAuxiliaryMetadata->am_header_crc32 = tmp32;
     
     // Extension present flag
-    err = GetBytes(&bb, 1, (u8*)&tmp8);
+    err = get_bytes(&bb, 1, (u8*)&tmp8);
     if(err) goto bail;
     newAuxiliaryMetadata->am_extension_present_flag = tmp8 >> 7;
     // Waveform type
@@ -1082,20 +1129,20 @@ MP4Err bgw_parse_auxiliary_metadata(u8* packetPayload, u32 packetLength, bgw_aux
     newAuxiliaryMetadata->am_private_flag = tmp8;
 
     // Stream max sampling rate minus 1
-    err = GetBytes(&bb, 4, (u8*)&tmp32);
+    err = get_bytes(&bb, 4, (u8*)&tmp32);
     if(err) goto bail;
     tmp32 = tmp32 >> 8;
     newAuxiliaryMetadata->am_stream_max_sampling_rate_minus1 = tmp32;
 
     // Stream max num channels minus 1
-    err = GetBytes(&bb, 2, (u8*)&tmp16);
+    err = get_bytes(&bb, 2, (u8*)&tmp16);
     if(err) goto bail;
     newAuxiliaryMetadata->am_stream_max_num_channels_minus1 = tmp16;
 
     if(newAuxiliaryMetadata->am_length_signal_mode)
     {
         // Stream num samples per channel
-        err = GetBytes(&bb, 4, (u8*)&tmp32);
+        err = get_bytes(&bb, 4, (u8*)&tmp32);
         if(err) goto bail;
         newAuxiliaryMetadata->am_stream_num_samples_per_ch = tmp32;
     }
@@ -1103,13 +1150,13 @@ MP4Err bgw_parse_auxiliary_metadata(u8* packetPayload, u32 packetLength, bgw_aux
     if(newAuxiliaryMetadata->am_waveform_type == BGW_WAVEFORM_TYPE_WT_BS2088)
     {
         // Metadata reserved flag
-        err = GetBytes(&bb, 4, (u8*)&tmp32);
+        err = get_bytes(&bb, 4, (u8*)&tmp32);
         newAuxiliaryMetadata->am_metadata_reserved_flag = tmp32 >> 31;
         // Metadata num bytes minus 1
         tmp32 = tmp32 & 0x7FFFFFFF;
         newAuxiliaryMetadata->am_metadata_num_bytes_minus1 = tmp32;
 
-        err = GetBytes(&bb, newAuxiliaryMetadata->am_metadata_num_bytes_minus1 + 1, newAuxiliaryMetadata->am_metadata_payload_bytes);
+        err = get_bytes(&bb, newAuxiliaryMetadata->am_metadata_num_bytes_minus1 + 1, newAuxiliaryMetadata->am_metadata_payload_bytes);
         if(err) goto bail;
     }
 
@@ -1138,12 +1185,12 @@ MP4Err bgw_parse_independent_frame(u8* packetPayload, u32 packetLength, bgw_inde
     bgw_independent_frame* newIF;
 
     BitBuffer bb;
-    err = BitBuffer_Init(&bb, packetPayload, packetLength); if (err) goto bail;
-
+    err = bit_buffer_init(&bb, packetPayload, packetLength); if (err) goto bail;
+    bb.prevent_emulation = 0;
     newIF = calloc(1, sizeof(bgw_independent_frame));
 
     // Channel group parameter set ID
-    err = GetBytes(&bb, 1, &tmp8);
+    err = get_bytes(&bb, 1, &tmp8);
     if(err) goto bail;
     newIF->if_channel_group_parameter_set_id = tmp8;
 
@@ -1153,7 +1200,7 @@ MP4Err bgw_parse_independent_frame(u8* packetPayload, u32 packetLength, bgw_inde
     if (numChannelGroups > 1)
     {
         // Channel group ID
-        tmp32 = GetBits(&bb, ceil_log2(numChannelGroups), &err);
+        tmp32 = get_bits(&bb, ceil_log2(numChannelGroups), &err);
         if(err) goto bail;
         newIF->if_channel_group_id = tmp32;
     }
@@ -1166,7 +1213,7 @@ MP4Err bgw_parse_independent_frame(u8* packetPayload, u32 packetLength, bgw_inde
     for(i = 0; i < numChannels; i++)
     {
         // Mean per channel
-        tmp32 = GetBits(&bb, 16, &err);
+        tmp32 = get_bits(&bb, 16, &err);
         if(err) goto bail;
         newIF->if_mean_per_channel[i] = (u16)tmp32;
     }
@@ -1177,7 +1224,7 @@ MP4Err bgw_parse_independent_frame(u8* packetPayload, u32 packetLength, bgw_inde
     if (stream->channelGroupParameterSetList[0]->cgps->cgps_length_signal_mode_flag)
     {
         // Indep num samples per channel minus1
-        tmp32 = GetBits(&bb, 32, &err);
+        tmp32 = get_bits(&bb, 32, &err);
         if(err) BAILWITHERROR(err)
         newIF->if_indep_num_samples_per_channel_minus1 = tmp32;
     }
@@ -1185,13 +1232,15 @@ MP4Err bgw_parse_independent_frame(u8* packetPayload, u32 packetLength, bgw_inde
     if (stream->channelGroupParameterSetList[0]->cgps->cgps_ctx_init_flag)
     {
         // CGPS ctx init flag
-        tmp32 = GetBits(&bb, 1, &err);
+        tmp32 = get_bits(&bb, 1, &err);
         if(err) goto bail;
         newIF->if_ctx_init_mode_flag = (u8)tmp32;
     }
 
     //fprintf(stdout, "Samples in frame sequence: %u\n", newIF->if_indep_num_samples_per_channel_minus1);
     // @todo Review retrieval of sample numbers
+    newIF->packet_length = packetLength;
+    newIF->if_bytes = packetPayload;
     *independentFrame = newIF;
 
 bail:
@@ -1214,7 +1263,7 @@ MP4Err bgw_parse_dependent_frame(u8* packetPayload, u32 packetLength, bgw_depend
     bgw_dependent_frame* newDF;
 
     BitBuffer bb;
-    err = BitBuffer_Init(&bb, packetPayload, packetLength); if (err) goto bail;
+    err = bit_buffer_init(&bb, packetPayload, packetLength); if (err) goto bail;
 
     newDF = calloc(1, sizeof(bgw_dependent_frame));
     if(!newDF) BAILWITHERROR(MP4NoMemoryErr);
@@ -1225,11 +1274,13 @@ MP4Err bgw_parse_dependent_frame(u8* packetPayload, u32 packetLength, bgw_depend
     if(numChannelGroups > 1)
     {
         // Channel group ID
-        tmp32 = GetBits(&bb, ceil_log2(numChannelGroups), &err);
+        tmp32 = get_bits(&bb, ceil_log2(numChannelGroups), &err);
         if(err) goto bail;
         newDF->df_channel_group_id = tmp32;
     }
 
+    newDF->packet_length = packetLength;
+    newDF->df_bytes = packetPayload;
     (*dependentFrame) = newDF;
 
 bail:

@@ -214,6 +214,38 @@ MP4Err bgw_populate_decoder_config_record(ISOBGWConfigAtomPtr* decoderConfigReco
 }
 
 /**
+ * @brief Adds a stream packet to a sample.
+ * @param streamPacket Struct containing the data of the stream packet.
+ * @param outSampleDataH output sample data.
+ * @return MP4NoErr on success, a negative integer on error.
+ */
+static MP4Err bgw_add_stream_packet_to_sample(bgw_stream_packet* streamPacket, ISOHandle* outSampleDataH)
+{
+  MP4Err err;
+  ISOHandle sampleDataH;
+
+  err = MP4NoErr;
+
+  err = ISONewHandle(streamPacket->total_length, &sampleDataH);
+	if (err) BAILWITHERROR(err);
+
+  memcpy((*sampleDataH),
+          streamPacket->stream_packet_header_bytes,
+          streamPacket->stream_packet_header_size);
+  memcpy((*sampleDataH) + streamPacket->stream_packet_header_size, 
+          streamPacket->syntax_structure_bytes, 
+          streamPacket->num_bytes_in_syntax_structure);
+
+  *outSampleDataH = sampleDataH;
+  return err;
+
+bail:
+  if (sampleDataH) ISODisposeHandle(sampleDataH);
+  TEST_RETURN(err);
+  return err;
+}
+
+/**
  * @brief Adds a sample containing a bgw_stream_packet to the media atom.
  * @param trak Track atom.
  * @param media Media atom.
@@ -224,9 +256,9 @@ MP4Err bgw_populate_decoder_config_record(ISOBGWConfigAtomPtr* decoderConfigReco
  * @param cumulativeOffset Cumulative offset of the samples already inserted in the file.
  * @return MP4NoErr on success, a negative integer on error.
  */
-static MP4Err bgw_add_samples_to_media(ISOTrack trak, ISOMedia media,
+static MP4Err bgw_add_sample_to_media(ISOTrack trak, ISOMedia media,
+      ISOHandle* sampleDataH,
       u8 firstSample,
-      bgw_stream_packet* streamPacket, 
       ISOBGWConfigAtomPtr decoderConfigRecord,
       bgw_params* parameters,
       u32 cumulativeOffset)
@@ -234,37 +266,20 @@ static MP4Err bgw_add_samples_to_media(ISOTrack trak, ISOMedia media,
   MP4Err err;
 
   // Handle definition
-  ISOHandle sampleDataH;
-  ISOHandle sampleDurationH;
-  ISOHandle sampleSizeH;
-  ISOHandle sampleEntryH;
-  ISOHandle sampleOffsetH;
-  ISOHandle syncSampleH;
+  ISOHandle sampleDurationH = NULL;
+  ISOHandle sampleSizeH     = NULL;
+  ISOHandle sampleEntryH    = NULL;
+  ISOHandle sampleOffsetH   = NULL;
+  ISOHandle syncSampleH     = NULL;
 
   err = MP4NoErr;
-
-  err = ISONewHandle(streamPacket->total_length, &sampleDataH);
-	if (err) BAILWITHERROR(err);
 
   err = ISOSetMediaLanguage(media, "und"); /* undetermined */
 	if (err) BAILWITHERROR(err);
 
-	err = ISONewHandle(1, &sampleEntryH);
-	if (err) BAILWITHERROR(err);
-
-  // Copy packet data to sample data
-  memcpy((*sampleDataH),
-          streamPacket->stream_packet_header_bytes,
-          streamPacket->stream_packet_header_size);
-  memcpy((*sampleDataH) + streamPacket->stream_packet_header_size, 
-          streamPacket->syntax_structure_bytes, 
-          streamPacket->num_bytes_in_syntax_structure);
-
   // Sample size
   err = ISONewHandle(sizeof(u32), &sampleSizeH);
-  err = ISOGetHandleSize(sampleDataH,(u32*)*sampleSizeH);
-
-  // Sample entry
+  err = ISOGetHandleSize(*sampleDataH,(u32*)*sampleSizeH);
 
   // Sample offset
   err = ISONewHandle(sizeof(u32), &sampleOffsetH);
@@ -279,19 +294,26 @@ static MP4Err bgw_add_samples_to_media(ISOTrack trak, ISOMedia media,
 
   u32 dataReferenceIndex = 1;
 
-  // Create sample description with BGW decoderConfigRecord atom
-  MP4GenericAtomRecord genericAtomRecord;
-  genericAtomRecord.data = decoderConfigRecord;
+  if(firstSample)
+  {
+    // Sample entry
+    err = ISONewHandle(1, &sampleEntryH);
+	  if (err) BAILWITHERROR(err);
 
-	err = ISONewBGWSampleDescription(trak, sampleEntryH, dataReferenceIndex, 
-    genericAtomRecord);
-  if(err) goto bail;
+    // Create sample description with BGW decoderConfigRecord atom
+    MP4GenericAtomRecord genericAtomRecord;
+    genericAtomRecord.data = decoderConfigRecord;
+
+    err = ISONewBGWSampleDescription(trak, sampleEntryH, dataReferenceIndex, 
+      genericAtomRecord);
+    if(err) goto bail;
+  }
 
   err = ISONewHandle(sizeof(u32), &sampleDurationH);
 	if (err) BAILWITHERROR(err);
-  *((u32*)*sampleDurationH) = parameters->sample_duration; // TODO: Retrieve from input params
+  *((u32*)*sampleDurationH) = parameters->sample_duration;
 
-	err = MP4AddMediaSamples(media, sampleDataH, 1,
+	err = MP4AddMediaSamples(media, *sampleDataH, 1,
                             sampleDurationH,
                             sampleSizeH,
                             firstSample ? sampleEntryH : NULL, sampleOffsetH, syncSampleH);
@@ -304,8 +326,6 @@ static MP4Err bgw_add_samples_to_media(ISOTrack trak, ISOMedia media,
 
   if (syncSampleH) err = ISODisposeHandle(syncSampleH);
 
-	err = ISODisposeHandle(sampleDataH);
-	if (err) BAILWITHERROR(err);
 	err = ISODisposeHandle(sampleSizeH);
 	if (err) BAILWITHERROR(err);
 	err = ISODisposeHandle(sampleDurationH);
@@ -371,6 +391,9 @@ MP4Err bgw_create_MP4_file(bgw_params *parameters, bgw_stream* stream)
   err = ISOBeginMediaEdits(media);
   if(err) BAILWITHERROR(err);
 
+  err = ISOSetMediaLanguage(media, "und"); /* undetermined */
+	if (err) BAILWITHERROR(err);
+
   // Create BGW DecoderConfigRecord Atom
   ISOBGWConfigAtomPtr decoderConfigRecord;
   err = MP4CreateBGWConfigAtom(&decoderConfigRecord);
@@ -379,18 +402,29 @@ MP4Err bgw_create_MP4_file(bgw_params *parameters, bgw_stream* stream)
   err = bgw_populate_decoder_config_record(&decoderConfigRecord, stream, parameters);
   if(err) BAILWITHERROR(err);
 
-  // Add each packet as a new sample to the media atom
-  // @todo Put full frame sequences in a single sample.
   u32 cumulativeOffset = 0;
+  u8 firstSample = 1;
+  u32 numSamples = 0;
 
   for(index_packet = 0; index_packet < stream->numStreamPackets; index_packet++)
   {
-    err = bgw_add_samples_to_media(trak, media, index_packet == 0, 
-      stream->stream_packets[index_packet], 
-      decoderConfigRecord, parameters, cumulativeOffset);
+    ISOHandle sampleDataH = NULL;
+
+    err = bgw_add_stream_packet_to_sample(stream->stream_packets[index_packet], &sampleDataH);
+    if(err) BAILWITHERROR(err);
+    numSamples++;
+
+    err = bgw_add_sample_to_media(trak, media, &sampleDataH, firstSample,
+        decoderConfigRecord, parameters, cumulativeOffset);
+    ISODisposeHandle(sampleDataH);
+    sampleDataH = NULL;
+    firstSample = 0;
+
     if(err) BAILWITHERROR(err);
     cumulativeOffset += stream->stream_packets[index_packet]->total_length;
   }
+
+  fprintf(stdout, "Number of samples added to the MP4 file: %d\n", numSamples);
 
   // Get media durations
   // @todo Manage media durations
@@ -433,7 +467,7 @@ int main(int argc, char *argv[])
   printf("Parsing input parameters...\n");
 
   bgw_params *inputParams = calloc(1, sizeof(bgw_params));
-  if(!parse_input_params(argc, argv, inputParams)) 
+  if(!parse_input_params(argc, argv, inputParams))
   {
     err = MP4BadParamErr;
     BAILWITHERROR(err);

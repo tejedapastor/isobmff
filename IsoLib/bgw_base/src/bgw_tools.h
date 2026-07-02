@@ -100,8 +100,9 @@ u32 DEFAULT_SAMPLE_DURATION;
  * @param p Pointer to the data.
  * @param length Length of the data in bytes.
  * @return MP4NoErr on success, a negative integer on error.
+ * @todo Merge with BitBuffer_Init present in other files.
  */
-MP4Err BitBuffer_Init(BitBuffer *bb, u8 *p, u32 length);
+MP4Err bit_buffer_init(BitBuffer *bb, u8 *p, u32 length);
 
 /**
  * @brief Calculates the Ceil(log2(x)) of a unsigned integer.
@@ -116,8 +117,9 @@ u32 ceil_log2(u32 x);
  * @param nBits Number of bits.
  * @param errout Output error
  * @return Bits read as a u32.
+ * @todo Merge with GetBits present in other files.
  */
-u32 GetBits(BitBuffer *bb, u32 nBits, MP4Err *errout);
+u32 get_bits(BitBuffer *bb, u32 nBits, MP4Err *errout);
 
 /**
  * @brief Gets the following sequence of bytes from a BitBuffer.
@@ -125,14 +127,16 @@ u32 GetBits(BitBuffer *bb, u32 nBits, MP4Err *errout);
  * @param nBytes Number of bytes.
  * @param p Retrieved data.
  * @return MP4NoErr on success, a negative integer on error.
+ * @todo Merge with GetBytes present in other files.
  */
-MP4Err GetBytes(BitBuffer *bb, u32 nBytes, u8 *p);
+MP4Err get_bytes(BitBuffer *bb, u32 nBytes, u8 *p);
 
 /**
  * @brief Reads an unsigned exp-golomb-coded value from a BitBuffer.
  * @param bb BitBuffer struct.
  * @param errout Output error.
  * @return Value read as a u32.
+ * @todo Merge with read_golomb_uev present in other files.
  */
 u32 read_golomb_uev(BitBuffer *bb, MP4Err *errout);
 
@@ -155,6 +159,14 @@ s32 read_golomb_sev(BitBuffer *bb, MP4Err *errout);
  * @return Value read as a u32.
  */
 u32 read_escaped_value(BitBuffer *bb, u32 *value, int k, int m, int n, MP4Err *errout);
+
+/** 
+ * @brief Reads a null-terminated UTF-8 string (st(v)) from the bitstream. The bitstream must be byte-aligned before calling.
+ * @param bb BitBuffer struct.
+ * @param errout Output error.
+ * @return A heap-allocated string (caller must free), or NULL on error. 
+ */
+char* read_string_stv(BitBuffer *bb, MP4Err *errout);
 
 /**
  * @brief Parses the CLI input parameters.

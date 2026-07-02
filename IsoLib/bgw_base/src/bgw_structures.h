@@ -169,7 +169,7 @@ typedef struct
   s32 cs_digital_max;                      /* se(v) */
   s32 cs_analogue_min;                     /* se(v) */
   s32 cs_analogue_max;                     /* se(v) */
-  s32 cs_analogue_units;                   /* st(v) */
+  char* cs_analogue_units;                 /* st(v) */
   u8 cs_recording_start_time_flag;         /* unsigned int(1) */
 } bgw_configuration_set_signal_info_data;
 
@@ -249,19 +249,25 @@ typedef struct
   u16* if_mean_per_channel;                     /* unsigned int(16) */
   u32 if_indep_num_samples_per_channel_minus1;  /* unsigned int(32) */
   u8 if_ctx_init_mode_flag;                     /* unsigned int(1) */
+  u32 packet_length;
+  u8* if_bytes;
 } bgw_independent_frame;
 
 typedef struct
 {
   u32 df_channel_group_id;   /* u(v) */
+  u32 packet_length;
+  u8* df_bytes;
 } bgw_dependent_frame;
 
-typedef struct 
+typedef struct
 {
   u32 channelGroupId;
+  u32 ifPacketIdx;
   bgw_independent_frame* independentFrame;
   u32 numDependentFrames;
   bgw_dependent_frame** dependentFrames;
+  u32* dfPacketIndices;
 } bgw_frame_sequence;
 
 typedef struct 

@@ -45,22 +45,21 @@ MP4Err bgw_parse_stream(FILE* input, bgw_stream **stream);
 
 /**
 * @brief Carries out specific actions for each stream packet type.
-* @param packetType Type of the stream packet.
-* @param packetLength Length in bytes of the payload of the stream packet.
-* @param packetPayload Payload of the stream packet.
-* @param packetLabel Substream indication of the stream packet.
+* @param streamPacket Structure containing stream packet info.
+* @param numStreamPacket Number of the packet to be handled.
 * @param stream Struct containing the main information of the T.261 stream.
 * @return MP4NoErr on success, a negative integer on error.
 */
-MP4Err bgw_handle_packet_data(u32 packetType, u32 packetLength, u8* packetPayload, u64 packetLabel, bgw_stream** stream);
+MP4Err bgw_handle_packet_data(bgw_stream_packet* streamPacket, u32 numStreamPacket, bgw_stream** stream);
 
 /**
 * @brief Initializes a new frame sequence for an independent frame.
 * @param independentFrame Struct containing the information of the independent frame.
+* @param ifPacketIdx Number of the IF packet in the list of packets.
 * @param stream Struct containing the main information of the T.261 stream.
 * @return MP4NoErr on success, a negative integer on error.
 */
-MP4Err bgw_create_new_frame_sequence(bgw_independent_frame* independentFrame, bgw_stream** stream);
+MP4Err bgw_create_new_frame_sequence(bgw_independent_frame* independentFrame, u32 ifPacketIdx, bgw_stream** stream);
 
 /**
 * @brief Inserts the information of a dependent frame into an existing frame sequence.
@@ -68,7 +67,7 @@ MP4Err bgw_create_new_frame_sequence(bgw_independent_frame* independentFrame, bg
 * @param stream Struct containing the main information of the T.261 stream.
 * @return MP4NoErr on success, a negative integer on error.
 */
-MP4Err bgw_insert_df_in_frame_sequence(bgw_dependent_frame* dependentFrame, bgw_stream** stream);
+MP4Err bgw_insert_df_in_frame_sequence(bgw_dependent_frame* dependentFrame, u32 dfPacketIndex, bgw_stream** stream);
 
 /**
 * @brief Checks if the indicated label (signalling the substream) has appeared previously in the bitstream.

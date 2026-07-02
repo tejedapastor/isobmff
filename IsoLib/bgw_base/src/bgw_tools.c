@@ -34,7 +34,7 @@
 
 u32 DEFAULT_SAMPLE_DURATION = 10;
 
-MP4Err BitBuffer_Init(BitBuffer *bb, u8 *p, u32 length) {
+MP4Err bit_buffer_init(BitBuffer *bb, u8 *p, u32 length) {
 	int err = MP4NoErr;
 
 	if (length > 0x0fffffff) {
@@ -64,7 +64,7 @@ u32 ceil_log2(u32 x) {
 	return ret;
 }
 
-u32 GetBits(BitBuffer *bb, u32 nBits, MP4Err *errout) {
+u32 get_bits(BitBuffer *bb, u32 nBits, MP4Err *errout) {
 	MP4Err err = MP4NoErr;
 	int myBits;
 	int myValue;
@@ -110,7 +110,7 @@ u32 GetBits(BitBuffer *bb, u32 nBits, MP4Err *errout) {
 
 	if (leftToRead > 0) {
 		u32 newBits;
-		newBits = GetBits(bb, leftToRead, &err);
+		newBits = get_bits(bb, leftToRead, &err);
 		myValue = (myValue << leftToRead) | newBits;
 	}
 
@@ -119,12 +119,12 @@ bail:
 	return myValue;
 }
 
-MP4Err GetBytes(BitBuffer *bb, u32 nBytes, u8 *p) {
+MP4Err get_bytes(BitBuffer *bb, u32 nBytes, u8 *p) {
 	MP4Err err = MP4NoErr;
 	unsigned int i;
 
 	for (i = 0; i < nBytes; i++) {
-		*p++ = (u8)GetBits(bb, 8, &err);
+		*p++ = (u8)get_bits(bb, 8, &err);
 		if (err) break;
 	}
 
@@ -140,16 +140,16 @@ u32 read_golomb_uev(BitBuffer *bb, MP4Err *errout)
 	u32 leading = 0;
 	u32 nbits = 0;
 
-	leading = GetBits(bb, 1, &err);  if (err) goto bail;
+	leading = get_bits(bb, 1, &err);  if (err) goto bail;
 
 	while (leading == 0) {
 		power = power << 1;
 		nbits++;
-		leading = GetBits(bb, 1, &err);  if (err) goto bail;
+		leading = get_bits(bb, 1, &err);  if (err) goto bail;
 	}
 
 	if (nbits > 0) {
-		value = GetBits(bb, nbits, &err); if (err) goto bail;
+		value = get_bits(bb, nbits, &err); if (err) goto bail;
 	}
 
 bail:
@@ -180,20 +180,20 @@ u32 read_escaped_value(BitBuffer *bb, u32 *readValue, int k, int m, int n, MP4Er
 	u32 value, addValue;
 	u32 bitsUsed = 0;
 
-	value = GetBits(bb, k, errout);
+	value = get_bits(bb, k, errout);
 	if(*errout) goto bail;
 	bitsUsed += k;
 
 	if(value == (1<<k)-1)
 	{
-		addValue = GetBits(bb, m, errout);
+		addValue = get_bits(bb, m, errout);
 		if(*errout) goto bail;
 		bitsUsed += m;
 
 		value += addValue;
 		if(addValue == (1<<m)-1)
 		{
-			addValue = GetBits(bb, n, errout);
+			addValue = get_bits(bb, n, errout);
 			if(*errout) goto bail;
 			bitsUsed += n;
 
@@ -204,6 +204,32 @@ u32 read_escaped_value(BitBuffer *bb, u32 *readValue, int k, int m, int n, MP4Er
 	return bitsUsed;
 bail:
 	return -1;
+}
+
+char* read_string_stv(BitBuffer *bb, MP4Err *errout)
+{
+    size_t capacity = 16;
+    size_t len = 0;
+    char* buf = malloc(capacity);
+    if(!buf) { *errout = MP4NoMemoryErr; return NULL; }
+
+    while(1)
+    {
+        MP4Err e = MP4NoErr;
+        u32 byte = get_bits(bb, 8, &e);
+        if(e) { free(buf); *errout = e; return NULL; }
+        if(byte == 0x00) break;  /* null terminator — consumed but not stored */
+        if(len + 1 >= capacity)
+        {
+            capacity *= 2;
+            char* tmp = realloc(buf, capacity);
+            if(!tmp) { free(buf); *errout = MP4NoMemoryErr; return NULL; }
+            buf = tmp;
+        }
+        buf[len++] = (char)byte;
+    }
+    buf[len] = '\0';
+    return buf;
 }
 
 int parse_input_params(int argc, char* argv[], bgw_params *parameters) {
