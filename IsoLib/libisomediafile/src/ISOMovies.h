@@ -933,7 +933,6 @@ extern "C"
   ISONewAMRWPSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH,
                                u32 dataReferenceIndex, u32 vendor, u8 decoder_version);
 
-
   /*************************************************************************************************
    * Biomedical and General Waveform
    ************************************************************************************************/
@@ -948,9 +947,9 @@ extern "C"
    *
    */
   ISO_EXTERN(ISOErr)
-  ISONewBGWSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH, u32 dataReferenceIndex,
-                            MP4GenericAtomRecord decoderConfigAtom);
-                             
+  ISONewBGWSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH,
+                             u32 dataReferenceIndex, MP4GenericAtomRecord decoderConfigAtom);
+
   /*************************************************************************************************
    * Meta Data
    ************************************************************************************************/

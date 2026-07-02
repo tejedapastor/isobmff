@@ -116,7 +116,7 @@ extern "C"
     MP4VolumetricHandlerType       = MP4_FOUR_CHAR_CODE('v', 'o', 'l', 'v'),
     MP4HapticHandlerType           = MP4_FOUR_CHAR_CODE('h', 'a', 'p', 't'),
     // @todo Define proper 4CC for the waveform handler type
-    MP4WaveformHandlerType         = MP4_FOUR_CHAR_CODE('w', 'a', 'v', 'e'),
+    MP4WaveformHandlerType = MP4_FOUR_CHAR_CODE('w', 'a', 'v', 'e'),
 
     ISOXMLAtomType       = MP4_FOUR_CHAR_CODE('x', 'm', 'l', ' '),
     ISOBinaryXMLAtomType = MP4_FOUR_CHAR_CODE('b', 'x', 'm', 'l')

@@ -14,7 +14,7 @@
  ISO/IEC have no liability for use of this software module or modifications thereof.
  Copyright is not released for products that do not conform to the ISO/IEC 23003-8 / ITU-T T.261
  standard.
- 
+
  Fraunhofer HHI retains full right to modify and use the code for its
  own purpose, assign or donate the code to a third party and to inhibit third parties
  from using the code for products that do not conform to MPEG-related ITU Recommenda-
@@ -23,7 +23,7 @@
  This copyright notice must be included in all copies or derivative works.
 
  Copyright (c) ISO/IEC 2026.
- 
+
  ***********************************************************************************/
 
 #include "MP4Atoms.h"
@@ -60,18 +60,19 @@ static MP4Err serialize(struct MP4Atom *s, char *buffer)
   MP4Err err;
   u32 x;
   u32 ui, array_index, packet_index;
-  
+
   ISOBGWConfigAtomPtr self = (ISOBGWConfigAtomPtr)s;
-  err = MP4NoErr;
+  err                      = MP4NoErr;
 
   err = MP4SerializeCommonFullAtomFields((MP4FullAtomPtr)s, buffer);
   if(err) goto bail;
   buffer += self->bytesWritten;
 
-  /* profileLevelIdc(8) + normativeEncoderFlag(1) + substreamPresentFlag(1) 
+  /* profileLevelIdc(8) + normativeEncoderFlag(1) + substreamPresentFlag(1)
     + cgInfoPresentFlag(1) + numSubstreams(5) */
-  x = (self->profile_level_idc << 8) | (self->normative_encoder_flag << 7) | (self->substream_present_flag << 6) 
-      | (self->cg_info_present_flag << 5) | self->num_substreams;
+  x = (self->profile_level_idc << 8) | (self->normative_encoder_flag << 7) |
+      (self->substream_present_flag << 6) | (self->cg_info_present_flag << 5) |
+      self->num_substreams;
   PUT16_V(x);
 
   /* numChannelGroups(16) */
@@ -141,7 +142,8 @@ static MP4Err calculateSize(struct MP4Atom *s)
   /* profile_level_idc */
   self->size += 1;
 
-  /* normative_encoder_flag(1) + substream_present_flag(1) + cg_info_present_flag(1) + num_substreams(5) */
+  /* normative_encoder_flag(1) + substream_present_flag(1) + cg_info_present_flag(1) +
+   * num_substreams(5) */
   self->size += 1;
 
   /* num_channel_groups(16) */
@@ -192,9 +194,9 @@ static MP4Err calculateSize(struct MP4Atom *s)
     }
   }
 
-  bail:
-    TEST_RETURN(err);
-    return err;
+bail:
+  TEST_RETURN(err);
+  return err;
 }
 
 static MP4Err createFromInputStream(MP4AtomPtr s, MP4AtomPtr proto, MP4InputStreamPtr inputStream)
@@ -213,11 +215,12 @@ static MP4Err createFromInputStream(MP4AtomPtr s, MP4AtomPtr proto, MP4InputStre
   GET8_V(x);
   self->profile_level_idc = x;
 
-  /* normative_encoder_flag(1), substream_present_flag(1), cg_info_present_flag(1), num_substreams(5)*/
+  /* normative_encoder_flag(1), substream_present_flag(1), cg_info_present_flag(1),
+   * num_substreams(5)*/
   GET8_V(x);
   self->normative_encoder_flag = (x >> 7);
   self->substream_present_flag = (x & 0x40 >> 6);
-  self->cg_info_present_flag = (x & 0x1F);
+  self->cg_info_present_flag   = (x & 0x1F);
 
   /* num_channel_groups(16) */
   GET16_V(x);
@@ -233,7 +236,7 @@ static MP4Err createFromInputStream(MP4AtomPtr s, MP4AtomPtr proto, MP4InputStre
       {
         /* substream_id(16) */
         GET16_V(x);
-        self->channelGroups[i].substream_id = x; 
+        self->channelGroups[i].substream_id = x;
       }
 
       /* channel_group_id(16) */
@@ -286,7 +289,7 @@ static MP4Err createFromInputStream(MP4AtomPtr s, MP4AtomPtr proto, MP4InputStre
       if(err) goto bail;
     }
   }
-  
+
 bail:
   TEST_RETURN(err);
   return err;
@@ -294,35 +297,35 @@ bail:
 
 MP4Err MP4CreateBGWConfigAtom(ISOBGWConfigAtomPtr *outAtom)
 {
-    MP4Err err;
-    ISOBGWConfigAtomPtr self;
-    u32 i;
+  MP4Err err;
+  ISOBGWConfigAtomPtr self;
+  u32 i;
 
-    u32 packetType[3] = {1, 2, 19};
-    self = (ISOBGWConfigAtomPtr)calloc(1, sizeof(ISOBGWConfigAtom));
-    TESTMALLOC(self);
+  u32 packetType[3] = {1, 2, 19};
+  self              = (ISOBGWConfigAtomPtr)calloc(1, sizeof(ISOBGWConfigAtom));
+  TESTMALLOC(self);
 
-    err = MP4CreateFullAtom((MP4AtomPtr)self);
+  err = MP4CreateFullAtom((MP4AtomPtr)self);
+  if(err) goto bail;
+  self->type                  = ISOBGWConfigAtomType;
+  self->name                  = "BgwConfigurationBox";
+  self->createFromInputStream = (cisfunc)createFromInputStream;
+  self->destroy               = destroy;
+  self->calculateSize         = calculateSize;
+  self->serialize             = serialize;
+
+  u32 arrayLength = sizeof(packetType) / sizeof(packetType[0]);
+
+  for(i = 0; i < arrayLength; i++)
+  {
+    err = MP4MakeLinkedList(&self->arrays[i].packetList);
     if(err) goto bail;
-    self->type = ISOBGWConfigAtomType;
-    self->name = "BgwConfigurationBox";
-    self->createFromInputStream = (cisfunc)createFromInputStream;
-    self->destroy = destroy;
-    self->calculateSize = calculateSize;
-    self->serialize = serialize;
+    self->arrays[i].packet_type = packetType[i];
+    self->arrays[i].num_packets = 0;
+  }
 
-    u32 arrayLength = sizeof(packetType)/sizeof(packetType[0]);
-
-    for(i = 0; i < arrayLength; i++)
-    {
-        err = MP4MakeLinkedList(&self->arrays[i].packetList);
-        if(err) goto bail;
-        self->arrays[i].packet_type = packetType[i];
-        self->arrays[i].num_packets = 0;
-    }
-
-    *outAtom = self;
+  *outAtom = self;
 bail:
-    TEST_RETURN(err);
-    return err;
+  TEST_RETURN(err);
+  return err;
 }

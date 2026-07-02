@@ -500,7 +500,8 @@ ISONewGeneralSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH,
   {
     err = MP4CreateWaveformSampleEntryAtom((MP4WaveformSampleEntryAtomPtr *)&entry);
     if(err) goto bail;
-  } else
+  }
+  else
   {
     /* this case covers MP4NewTrackIsMetadata */
     err = MP4CreateMPEGSampleEntryAtom((MP4MPEGSampleEntryAtomPtr *)&entry);
@@ -2434,7 +2435,7 @@ bail:
 
 MP4_EXTERN(MP4Err)
 ISONewBGWSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH, u32 dataReferenceIndex,
-                          MP4GenericAtomRecord decoderConfigRecord)
+                           MP4GenericAtomRecord decoderConfigRecord)
 {
   MP4Err MP4CreateWaveformSampleEntryAtom(MP4WaveformSampleEntryAtomPtr * outAtom);
   MP4Err MP4CreateBGWConfigAtom(ISOBGWConfigAtomPtr * outAtom);
@@ -2451,13 +2452,13 @@ ISONewBGWSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH, u32 
 
   trak = (MP4TrackAtomPtr)theTrack;
   if(!(trak->newTrackFlags & MP4NewTrackIsWaveform)) BAILWITHERROR(MP4BadParamErr);
-  
+
   err = MP4CreateWaveformSampleEntryAtom((MP4WaveformSampleEntryAtomPtr *)&entry);
   if(err) BAILWITHERROR(err);
-  
-  entry->super = NULL;
+
+  entry->super              = NULL;
   entry->dataReferenceIndex = dataReferenceIndex;
-  entry->type = ISOBGWSampleEntrySingleTrackAtomType;
+  entry->type               = ISOBGWSampleEntrySingleTrackAtomType;
 
   err = MP4AddListEntry((void *)config, entry->ExtensionAtomList);
   if(err) BAILWITHERROR(err);
@@ -2465,7 +2466,7 @@ ISONewBGWSampleDescription(MP4Track theTrack, MP4Handle sampleDescriptionH, u32 
   err = atomPtrToSampleEntryH(sampleDescriptionH, (MP4AtomPtr)entry);
   if(err) BAILWITHERROR(err);
 
-  bail:
-    TEST_RETURN(err);
-    return err;
+bail:
+  TEST_RETURN(err);
+  return err;
 }

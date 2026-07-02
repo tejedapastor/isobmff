@@ -14,7 +14,7 @@
  ISO/IEC have no liability for use of this software module or modifications thereof.
  Copyright is not released for products that do not conform to the ISO/IEC 23003-8 / ITU-T T.261
  standard.
- 
+
  Fraunhofer HHI retains full right to modify and use the code for its
  own purpose, assign or donate the code to a third party and to inhibit third parties
  from using the code for products that do not conform to MPEG-related ITU Recommenda-
@@ -23,7 +23,7 @@
  This copyright notice must be included in all copies or derivative works.
 
  Copyright (c) ISO/IEC 2026.
- 
+
  ***********************************************************************************/
 
 #include "MP4Atoms.h"
@@ -49,7 +49,7 @@ static MP4Err serialize(struct MP4Atom *s, char *buffer)
 {
   MP4Err err;
   MP4WaveformSampleEntryAtomPtr self = (MP4WaveformSampleEntryAtomPtr)s;
-  err                              = MP4NoErr;
+  err                                = MP4NoErr;
 
   err = MP4SerializeCommonBaseAtomFields(s, buffer);
   if(err) goto bail;
@@ -70,11 +70,11 @@ static MP4Err calculateSize(struct MP4Atom *s)
 {
   MP4Err err;
   MP4WaveformSampleEntryAtomPtr self = (MP4WaveformSampleEntryAtomPtr)s;
-  err                              = MP4NoErr;
+  err                                = MP4NoErr;
 
   err = MP4CalculateBaseAtomFieldSize(s);
   if(err) goto bail;
-  
+
   // Reserved + dataReferenceIndex
   self->size += 6 + 2;
   ADD_ATOM_LIST_SIZE(ExtensionAtomList);

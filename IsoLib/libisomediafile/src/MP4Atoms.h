@@ -170,12 +170,12 @@ enum
   MP4MetadataSetupBoxType                      = MP4_FOUR_CHAR_CODE('s', 'e', 't', 'u'),
   MP4GroupsListBoxType                         = MP4_FOUR_CHAR_CODE('g', 'r', 'p', 'l'),
   MP4AlternativeEntityGroup                    = MP4_FOUR_CHAR_CODE('a', 'l', 't', 'r'),
-  
-  MP4WaveformSampleEntryAtomType               = MP4_FOUR_CHAR_CODE('m', 'p', '4', 'w'),
-  ISOBGWConfigAtomType                         = MP4_FOUR_CHAR_CODE('b', 'g', 'w', 'C'),
-  ISOBGWSampleEntrySingleTrackAtomType         = MP4_FOUR_CHAR_CODE('b', 'g', 'w', '1'),
-  ISOBGWSampleEntryMultiTrackBaseAtomType      = MP4_FOUR_CHAR_CODE('b', 'g', 'w', 'b'),
-  ISOBGWSampleEntryMultiTrackDerivedAtomType   = MP4_FOUR_CHAR_CODE('b', 'g', 'w', '2')
+
+  MP4WaveformSampleEntryAtomType             = MP4_FOUR_CHAR_CODE('m', 'p', '4', 'w'),
+  ISOBGWConfigAtomType                       = MP4_FOUR_CHAR_CODE('b', 'g', 'w', 'C'),
+  ISOBGWSampleEntrySingleTrackAtomType       = MP4_FOUR_CHAR_CODE('b', 'g', 'w', '1'),
+  ISOBGWSampleEntryMultiTrackBaseAtomType    = MP4_FOUR_CHAR_CODE('b', 'g', 'w', 'b'),
+  ISOBGWSampleEntryMultiTrackDerivedAtomType = MP4_FOUR_CHAR_CODE('b', 'g', 'w', '2')
 
 };
 
@@ -1249,29 +1249,29 @@ typedef struct ISOBGWConfigAtom
 {
   MP4_FULL_ATOM
 
-  u8 profile_level_idc;               /* unsigned int(8) */
-  u8 normative_encoder_flag;          /* unsigned int(1) */
-  u8 substream_present_flag;          /* unsigned int(1) */
-  u8 cg_info_present_flag;            /* unsigned int(1) */
-  u8 num_substreams;                  /* unsigned int(5) */
-  u16 num_channel_groups;             /* unsigned int(16) */
+  u8 profile_level_idc;      /* unsigned int(8) */
+  u8 normative_encoder_flag; /* unsigned int(1) */
+  u8 substream_present_flag; /* unsigned int(1) */
+  u8 cg_info_present_flag;   /* unsigned int(1) */
+  u8 num_substreams;         /* unsigned int(5) */
+  u16 num_channel_groups;    /* unsigned int(16) */
 
-  struct 
+  struct
   {
     u16 substream_id;
     u16 channel_group_id;
     u8 cg_signal_type;
   } *channelGroups;
 
-  u16 max_channel_count;              /* int(16) */
-  u16 max_sampling_rate_numerator;    /* int(16) */
-  u16 max_sampling_rate_denumerator;  /* int(16) */
+  u16 max_channel_count;             /* int(16) */
+  u16 max_sampling_rate_numerator;   /* int(16) */
+  u16 max_sampling_rate_denumerator; /* int(16) */
 
-  u8 num_of_arrays;                   /* int(8) */
-  struct 
+  u8 num_of_arrays; /* int(8) */
+  struct
   {
-    u8 packet_type;                   /* unsigned int(3)[num_of_arrays] */
-    u16 num_packets;   
+    u8 packet_type; /* unsigned int(3)[num_of_arrays] */
+    u16 num_packets;
     MP4LinkedList packetList;
   } arrays[3];
 
